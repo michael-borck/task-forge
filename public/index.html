@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Task Forge — keep-asking task designer</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- In-browser parsers: the uploaded file is read locally; only extracted text is sent. -->
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs" type="module"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Task Forge</h1>
+      <p class="sub">
+        Turn a worksheet into an AI-assisted lab task for the <strong>keep-asking</strong> study —
+        or stress-test a task you already have. Nothing you upload leaves your computer except the
+        text sent to the AI; nothing is stored on the server.
+      </p>
+    </header>
+
+    <main>
+      <section id="inputCard" class="card">
+        <div class="row">
+          <label>What do you have?</label>
+          <div class="seg">
+            <button type="button" class="seg-btn active" data-mode="generate">A worksheet to convert</button>
+            <button type="button" class="seg-btn" data-mode="refit">A task idea to stress-test</button>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div>
+            <label for="unit">Unit (optional)</label>
+            <input id="unit" type="text" placeholder="e.g. MKTG1000 Discovering Marketing" />
+          </div>
+          <div>
+            <label for="discipline">Discipline (optional)</label>
+            <input id="discipline" type="text" placeholder="e.g. Marketing" />
+          </div>
+        </div>
+
+        <label for="source">Paste the worksheet / idea, or drop a file</label>
+        <textarea id="source" rows="9" placeholder="Paste text here, or use the file button below…"></textarea>
+
+        <div class="row between">
+          <div class="filewrap">
+            <input id="file" type="file" accept=".docx,.pdf,.txt,.md" />
+            <span id="fileStatus" class="muted"></span>
+          </div>
+          <label class="check">
+            <input id="fast" type="checkbox" />
+            Fast/cheap mode (Haiku) — good for quick iteration
+          </label>
+        </div>
+
+        <div class="row">
+          <button id="go" class="primary">Generate task designs</button>
+          <span id="status" class="muted"></span>
+        </div>
+      </section>
+
+      <section id="results" class="hidden">
+        <div id="summary" class="summary"></div>
+        <div id="options"></div>
+
+        <div class="card iterate">
+          <label for="instruction">Iterate — tell the AI what to change</label>
+          <textarea id="instruction" rows="3" placeholder="e.g. Make option 2 harder; add a conflicting stakeholder. Or: tailor option 1 to a regional hospital."></textarea>
+          <div class="row">
+            <button id="refine" class="primary">Refine</button>
+            <button id="reset" class="ghost">Start over</button>
+            <span id="status2" class="muted"></span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Access-code modal (shown only if the server requires one) -->
+    <div id="codeModal" class="modal hidden">
+      <div class="modal-box">
+        <h2>Access code</h2>
+        <p class="muted">This tool is shared with the research team. Enter the code you were given.</p>
+        <input id="codeInput" type="password" placeholder="Access code" />
+        <button id="codeSave" class="primary">Continue</button>
+        <p id="codeError" class="error hidden">That code didn't work — try again.</p>
+      </div>
+    </div>
+
+    <footer>
+      <span class="muted">keep-asking · HREC 83897 · task designs are drafts for the team to refine and sign off.</span>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

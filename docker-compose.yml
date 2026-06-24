@@ -1,0 +1,8 @@
+# VPS deploy: put your .env next to this file, then `docker compose pull && docker compose up -d`.
+services:
+  task-forge:
+    image: ghcr.io/michael-borck/task-forge:latest
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080" # map to a reverse proxy (Caddy/nginx/Traefik) for HTTPS in front
