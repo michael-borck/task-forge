@@ -74,4 +74,16 @@ footer { padding: 24px 20px 40px; }
 .modal-box { background: #fff; border-radius: 12px; padding: 24px; width: min(92vw, 380px); }
 .modal-box h2 { margin: 0 0 6px; }
 .modal-box input { margin: 12px 0; }
+.pw-field { position: relative; margin: 12px 0; }
+.pw-field input { margin: 0; padding-right: 44px; }
+.pw-toggle {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  background: none; border: 0; padding: 8px; cursor: pointer;
+  color: var(--muted); display: inline-flex; align-items: center;
+}
+.pw-toggle:hover { color: var(--ink); }
+.pw-toggle svg { width: 18px; height: 18px; }
+.pw-toggle .eye-off { display: none; }
+.pw-toggle.revealed .eye { display: none; }
+.pw-toggle.revealed .eye-off { display: inline; }
 @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }

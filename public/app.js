@@ -80,6 +80,18 @@ $("codeInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") submitCode();
 });
 
+// Eye toggle: reveal the code so users can check what they typed (default hidden).
+$("codeToggle").addEventListener("click", () => {
+  const input = $("codeInput");
+  const reveal = input.type === "password";
+  input.type = reveal ? "text" : "password";
+  const btn = $("codeToggle");
+  btn.classList.toggle("revealed", reveal);
+  btn.setAttribute("aria-label", reveal ? "Hide code" : "Show code");
+  btn.setAttribute("title", reveal ? "Hide code" : "Show code");
+  input.focus();
+});
+
 // --- mode toggle ---
 document.querySelectorAll(".seg-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
