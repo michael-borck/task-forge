@@ -9,19 +9,75 @@ let mode = "generate";
 let history = []; // [{role, content}] — conversation with the model
 let accessCode = localStorage.getItem("tf_access_code") || "";
 
-// --- access code handling ---
+// --- access code handling (real gate: the app stays locked until a valid code) ---
 async function ensureAccess() {
-  const cfg = await fetch("/api/config").then((r) => r.json()).catch(() => ({}));
-  if (cfg.accessCodeRequired && !accessCode) showCodeModal();
+  let cfg;
+  try {
+    cfg = await fetch("/api/config").then((r) => r.json());
+  } catch {
+    // Can't reach the server — lock the UI rather than leave it open.
+    showCodeModal("Can't reach the server. Check your connection and try again.");
+    return;
+  }
+  if (!cfg.accessCodeRequired) return; // open mode — no gate
+  // A code we stored earlier may have been rotated; re-verify before trusting it.
+  if (accessCode && (await verifyCode(accessCode))) return;
+  accessCode = "";
+  localStorage.removeItem("tf_access_code");
+  showCodeModal();
 }
-function showCodeModal() {
+
+// Returns true only if the server accepts the code (200 from /api/verify).
+async function verifyCode(code) {
+  try {
+    const res = await fetch("/api/verify", { method: "POST", headers: { "x-access-code": code } });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+function showCodeModal(message) {
+  const err = $("codeError");
+  if (message) {
+    err.textContent = message;
+    err.classList.remove("hidden");
+  } else {
+    err.classList.add("hidden");
+  }
   $("codeModal").classList.remove("hidden");
+  $("codeInput").focus();
 }
-$("codeSave").addEventListener("click", () => {
-  accessCode = $("codeInput").value.trim();
-  if (!accessCode) return;
-  localStorage.setItem("tf_access_code", accessCode);
-  $("codeModal").classList.add("hidden");
+
+async function submitCode() {
+  const code = $("codeInput").value.trim();
+  const err = $("codeError");
+  const btn = $("codeSave");
+  if (!code) {
+    err.textContent = "Enter the access code to continue.";
+    err.classList.remove("hidden");
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "Checking…";
+  err.classList.add("hidden");
+  const ok = await verifyCode(code);
+  btn.disabled = false;
+  btn.textContent = "Continue";
+  if (!ok) {
+    err.textContent = "That code didn't work — try again.";
+    err.classList.remove("hidden");
+    $("codeInput").select();
+    return;
+  }
+  accessCode = code;
+  localStorage.setItem("tf_access_code", code);
+  $("codeModal").classList.add("hidden"); // unlock only after the server confirms
+}
+
+$("codeSave").addEventListener("click", submitCode);
+$("codeInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submitCode();
 });
 
 // --- mode toggle ---

@@ -70,6 +70,12 @@ app.get("/api/config", (_req, res) => {
   res.json({ accessCodeRequired: Boolean(ACCESS_CODE) });
 });
 
+// Validate an access code on its own, so the UI gate can verify before unlocking.
+// accessGuard returns 401 for a wrong/missing code; this responds 200 only when valid.
+app.post("/api/verify", accessGuard, (_req, res) => {
+  res.json({ ok: true });
+});
+
 // Generate or refine task designs. Stateless: the client owns the conversation.
 // Body: { history?: [{role, content}], kickoff?: {mode, unit, discipline, worksheetText}, instruction?, fast? }
 app.post("/api/generate", accessGuard, rateGuard, async (req, res) => {

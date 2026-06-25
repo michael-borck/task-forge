@@ -70,7 +70,7 @@ ul.checklist li.ok { color: var(--ok); }
 ul.checklist li.warn { color: var(--warn); }
 .iterate { margin-top: 6px; }
 footer { padding: 24px 20px 40px; }
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; }
+.modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; }
 .modal-box { background: #fff; border-radius: 12px; padding: 24px; width: min(92vw, 380px); }
 .modal-box h2 { margin: 0 0 6px; }
 .modal-box input { margin: 12px 0; }
