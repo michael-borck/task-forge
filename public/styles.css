@@ -54,7 +54,6 @@ button.ghost { background: #fff; border: 1px solid var(--line); padding: 8px 14p
 button.small { padding: 5px 10px; font-size: 13px; }
 button:disabled { opacity: 0.5; cursor: default; }
 .muted { color: var(--muted); font-size: 14px; }
-.error { color: #b00020; }
 .hidden { display: none; }
 .summary { font-size: 17px; margin: 6px 0 16px; padding: 0 2px; }
 .option .opt-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -70,20 +69,4 @@ ul.checklist li.ok { color: var(--ok); }
 ul.checklist li.warn { color: var(--warn); }
 .iterate { margin-top: 6px; }
 footer { padding: 24px 20px 40px; }
-.modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; }
-.modal-box { background: #fff; border-radius: 12px; padding: 24px; width: min(92vw, 380px); }
-.modal-box h2 { margin: 0 0 6px; }
-.modal-box input { margin: 12px 0; }
-.pw-field { position: relative; margin: 12px 0; }
-.pw-field input { margin: 0; padding-right: 44px; }
-.pw-toggle {
-  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
-  background: none; border: 0; padding: 8px; cursor: pointer;
-  color: var(--muted); display: inline-flex; align-items: center;
-}
-.pw-toggle:hover { color: var(--ink); }
-.pw-toggle svg { width: 18px; height: 18px; }
-.pw-toggle .eye-off { display: none; }
-.pw-toggle.revealed .eye { display: none; }
-.pw-toggle.revealed .eye-off { display: inline; }
 @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }

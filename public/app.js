@@ -7,90 +7,6 @@ const $ = (id) => document.getElementById(id);
 // --- state ---
 let mode = "generate";
 let history = []; // [{role, content}] — conversation with the model
-let accessCode = localStorage.getItem("tf_access_code") || "";
-
-// --- access code handling (real gate: the app stays locked until a valid code) ---
-async function ensureAccess() {
-  let cfg;
-  try {
-    cfg = await fetch("/api/config").then((r) => r.json());
-  } catch {
-    // Can't reach the server — lock the UI rather than leave it open.
-    showCodeModal("Can't reach the server. Check your connection and try again.");
-    return;
-  }
-  if (!cfg.accessCodeRequired) return; // open mode — no gate
-  // A code we stored earlier may have been rotated; re-verify before trusting it.
-  if (accessCode && (await verifyCode(accessCode))) return;
-  accessCode = "";
-  localStorage.removeItem("tf_access_code");
-  showCodeModal();
-}
-
-// Returns true only if the server accepts the code (200 from /api/verify).
-async function verifyCode(code) {
-  try {
-    const res = await fetch("/api/verify", { method: "POST", headers: { "x-access-code": code } });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
-function showCodeModal(message) {
-  const err = $("codeError");
-  if (message) {
-    err.textContent = message;
-    err.classList.remove("hidden");
-  } else {
-    err.classList.add("hidden");
-  }
-  $("codeModal").classList.remove("hidden");
-  $("codeInput").focus();
-}
-
-async function submitCode() {
-  const code = $("codeInput").value.trim();
-  const err = $("codeError");
-  const btn = $("codeSave");
-  if (!code) {
-    err.textContent = "Enter the access code to continue.";
-    err.classList.remove("hidden");
-    return;
-  }
-  btn.disabled = true;
-  btn.textContent = "Checking…";
-  err.classList.add("hidden");
-  const ok = await verifyCode(code);
-  btn.disabled = false;
-  btn.textContent = "Continue";
-  if (!ok) {
-    err.textContent = "That code didn't work — try again.";
-    err.classList.remove("hidden");
-    $("codeInput").select();
-    return;
-  }
-  accessCode = code;
-  localStorage.setItem("tf_access_code", code);
-  $("codeModal").classList.add("hidden"); // unlock only after the server confirms
-}
-
-$("codeSave").addEventListener("click", submitCode);
-$("codeInput").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") submitCode();
-});
-
-// Eye toggle: reveal the code so users can check what they typed (default hidden).
-$("codeToggle").addEventListener("click", () => {
-  const input = $("codeInput");
-  const reveal = input.type === "password";
-  input.type = reveal ? "text" : "password";
-  const btn = $("codeToggle");
-  btn.classList.toggle("revealed", reveal);
-  btn.setAttribute("aria-label", reveal ? "Hide code" : "Show code");
-  btn.setAttribute("title", reveal ? "Hide code" : "Show code");
-  input.focus();
-});
 
 // --- mode toggle ---
 document.querySelectorAll(".seg-btn").forEach((btn) => {
@@ -144,16 +60,9 @@ async function callApi(body, statusEl) {
   statusEl.textContent = "Thinking… (this can take 20–40s)";
   const res = await fetch("/api/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-access-code": accessCode },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (res.status === 401) {
-    statusEl.textContent = "";
-    localStorage.removeItem("tf_access_code");
-    accessCode = "";
-    showCodeModal();
-    throw new Error("Access code required.");
-  }
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || `Request failed (${res.status}).`);
   statusEl.textContent = `Done · ${json.model}`;
@@ -337,5 +246,3 @@ function downloadOption(opt, i) {
   a.click();
   URL.revokeObjectURL(url);
 }
-
-ensureAccess();

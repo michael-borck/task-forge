@@ -25,7 +25,7 @@ exercise — you converse with the model to sharpen the task.
 ## Run locally
 
 ```bash
-cp .env.example .env        # add ANTHROPIC_API_KEY and an ACCESS_CODE
+cp .env.example .env        # add your ANTHROPIC_API_KEY
 npm install
 npm start                   # http://localhost:8080
 ```
@@ -45,16 +45,22 @@ docker compose pull
 docker compose up -d
 ```
 
-Put a reverse proxy (Caddy/nginx/Traefik) in front for HTTPS; the container listens on
-`:8080`. The first VPS pull from GHCR may need `docker login ghcr.io` if the package is
-private.
+Put a reverse proxy (Caddy/nginx/Traefik) in front for HTTPS **and access control**;
+the container listens on `:8080` and has no built-in auth. For a small team, a one-line
+`basic_auth` in your Caddyfile is the simplest gate:
+
+```
+task-forge.example.edu {
+    basic_auth { team JDJhJDE0...hash }   # generate with: caddy hash-password
+    reverse_proxy task-forge:8080
+}
+```
 
 ## Configuration (`.env`)
 
 | Variable | Purpose | Default |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | **Required.** Held server-side only. | — |
-| `ACCESS_CODE` | Shared passphrase; blank = fully open. | — |
 | `MODEL` | Quality generation model. | `claude-sonnet-4-6` |
 | `FAST_MODEL` | "Fast/cheap mode" for quick iteration. | `claude-haiku-4-5` |
 | `MAX_REQUESTS_PER_DAY` | Per-visitor-IP request cap. | `100` |
@@ -64,10 +70,10 @@ private.
 
 ## Security notes
 
-- **No login by design**, gated by a shared `ACCESS_CODE` plus per-IP and daily-token
-  caps. This is appropriate for a small team over a short window — it is **not**
-  hardened multi-tenant auth. Don't widely advertise the URL.
-- The access code is cached in the visitor's browser `localStorage` after first entry.
+- **No login in the app by design.** Access control is delegated to the reverse proxy
+  (e.g. Caddy `basic_auth`). The app adds per-IP and daily-token caps on top. This suits
+  a small team over a short window — it is **not** hardened multi-tenant auth. Don't
+  widely advertise the URL.
 - The rate/spend guards are in-memory and reset on container restart.
 
 ## What it is not

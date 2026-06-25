@@ -10,7 +10,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // --- config (all from .env) ---
 const PORT = process.env.PORT || 8080;
-const ACCESS_CODE = process.env.ACCESS_CODE || ""; // shared passphrase; empty = open
 const MODEL = process.env.MODEL || "claude-sonnet-4-6"; // quality generation
 const FAST_MODEL = process.env.FAST_MODEL || "claude-haiku-4-5"; // quick iteration
 const MAX_REQUESTS_PER_DAY = Number(process.env.MAX_REQUESTS_PER_DAY || 100); // per IP
@@ -51,34 +50,17 @@ function rateGuard(req, res, next) {
   next();
 }
 
-function accessGuard(req, res, next) {
-  if (!ACCESS_CODE) return next(); // open mode
-  if (req.get("x-access-code") === ACCESS_CODE) return next();
-  return res.status(401).json({ error: "Invalid or missing access code." });
-}
-
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 app.use(express.static(join(__dirname, "public")));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, model: MODEL, fastModel: FAST_MODEL, accessCodeRequired: Boolean(ACCESS_CODE) });
-});
-
-// Whether the access code is required (lets the UI prompt only when needed).
-app.get("/api/config", (_req, res) => {
-  res.json({ accessCodeRequired: Boolean(ACCESS_CODE) });
-});
-
-// Validate an access code on its own, so the UI gate can verify before unlocking.
-// accessGuard returns 401 for a wrong/missing code; this responds 200 only when valid.
-app.post("/api/verify", accessGuard, (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, model: MODEL, fastModel: FAST_MODEL });
 });
 
 // Generate or refine task designs. Stateless: the client owns the conversation.
 // Body: { history?: [{role, content}], kickoff?: {mode, unit, discipline, worksheetText}, instruction?, fast? }
-app.post("/api/generate", accessGuard, rateGuard, async (req, res) => {
+app.post("/api/generate", rateGuard, async (req, res) => {
   try {
     const { history = [], kickoff, instruction, fast } = req.body || {};
     const messages = Array.isArray(history) ? [...history] : [];
@@ -140,5 +122,5 @@ app.post("/api/generate", accessGuard, rateGuard, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Task Forge listening on :${PORT} (model=${MODEL}, fast=${FAST_MODEL}, accessCode=${Boolean(ACCESS_CODE)})`);
+  console.log(`Task Forge listening on :${PORT} (model=${MODEL}, fast=${FAST_MODEL})`);
 });
