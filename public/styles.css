@@ -69,5 +69,15 @@ ul.checklist { list-style: none; padding-left: 2px; }
 ul.checklist li.ok { color: var(--ok); }
 ul.checklist li.warn { color: var(--warn); }
 .iterate { margin-top: 6px; }
+/* accordion option layout */
+.acc-item { padding: 0; margin: 0 0 12px; overflow: hidden; }
+.acc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; cursor: pointer; background: #fbfbf9; }
+.acc-head:hover { background: #f4f4f0; }
+.acc-title h3 { margin: 0; font-size: 17px; }
+.acc-title .angle { margin: 2px 0 0; }
+.acc-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.chev { font-size: 13px; color: var(--muted); width: 16px; text-align: center; }
+.acc-body { padding: 4px 18px 16px; }
+.acc-item:not(.open) .acc-body { display: none; }
 footer { padding: 24px 20px 40px; }
 @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }

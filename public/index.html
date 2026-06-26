@@ -61,18 +61,19 @@
       </section>
 
       <section id="results" class="hidden">
-        <div id="summary" class="summary"></div>
-        <div id="options"></div>
-
         <div class="card iterate">
           <label for="instruction">Iterate — tell the AI what to change</label>
           <textarea id="instruction" rows="3" placeholder="e.g. Make option 2 harder; add a conflicting stakeholder. Or: tailor option 1 to a regional hospital."></textarea>
           <div class="row">
             <button id="refine" class="primary">Refine</button>
-            <button id="reset" class="ghost">Start over</button>
+            <button id="tryAgain" class="ghost">Try again</button>
+            <button id="startOver" class="ghost">Start over</button>
             <span id="status2" class="muted"></span>
           </div>
         </div>
+
+        <div id="summary" class="summary"></div>
+        <div id="options"></div>
       </section>
     </main>
 

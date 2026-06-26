@@ -7,6 +7,7 @@ const $ = (id) => document.getElementById(id);
 // --- state ---
 let mode = "generate";
 let history = []; // [{role, content}] — conversation with the model
+let lastKickoff = null; // last kickoff sent — "Try again" reuses it for a fresh guess
 
 // --- mode toggle ---
 document.querySelectorAll(".seg-btn").forEach((btn) => {
@@ -70,29 +71,29 @@ async function callApi(body, statusEl) {
   return json.data;
 }
 
+// Shared by "Generate" (Go) and "Try again": reset history and kick off a fresh
+// generation. Go reads the form; Try again reuses the last kickoff verbatim.
+async function runKickoff(kickoff, statusEl) {
+  history = [];
+  lastKickoff = kickoff;
+  const data = await callApi({ kickoff, fast: $("fast").checked }, statusEl);
+  render(data);
+  $("inputCard").classList.add("hidden");
+  $("results").classList.remove("hidden");
+  $("results").scrollIntoView({ behavior: "smooth" });
+}
+
 $("go").addEventListener("click", async () => {
   const worksheetText = $("source").value;
   if (!worksheetText.trim()) {
     $("status").textContent = "Paste some text or load a file first.";
     return;
   }
-  history = [];
   try {
-    const data = await callApi(
-      {
-        kickoff: {
-          mode,
-          unit: $("unit").value,
-          discipline: $("discipline").value,
-          worksheetText,
-        },
-        fast: $("fast").checked,
-      },
+    await runKickoff(
+      { mode, unit: $("unit").value, discipline: $("discipline").value, worksheetText },
       $("status"),
     );
-    render(data);
-    $("results").classList.remove("hidden");
-    $("results").scrollIntoView({ behavior: "smooth" });
   } catch (err) {
     $("status").textContent = err.message;
   }
@@ -113,12 +114,27 @@ $("refine").addEventListener("click", async () => {
   }
 });
 
-$("reset").addEventListener("click", () => {
+// "Try again" = a fresh guess from the same worksheet (new suggestions; current ones discarded).
+$("tryAgain").addEventListener("click", async () => {
+  if (!lastKickoff) return;
+  try {
+    await runKickoff(lastKickoff, $("status2"));
+  } catch (err) {
+    $("status2").textContent = err.message;
+  }
+});
+
+// "Start over" = back to the compose form. Fields stay pre-filled so the user can
+// tweak and regenerate, or clear the box for a brand-new task.
+$("startOver").addEventListener("click", () => {
   history = [];
+  lastKickoff = null;
   $("results").classList.add("hidden");
+  $("inputCard").classList.remove("hidden");
   $("options").innerHTML = "";
   $("summary").innerHTML = "";
   $("status").textContent = "";
+  $("status2").textContent = "";
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
@@ -129,7 +145,7 @@ function render(data) {
   $("summary").textContent = data.summary || "";
   const wrap = $("options");
   wrap.innerHTML = "";
-  (data.options || []).forEach((opt, i) => wrap.appendChild(optionCard(opt, i)));
+  (data.options || []).forEach((opt, i) => wrap.appendChild(accordionItem(opt, i)));
 }
 
 function el(tag, cls, text) {
@@ -139,24 +155,12 @@ function el(tag, cls, text) {
   return e;
 }
 
-function optionCard(opt, i) {
-  const card = el("div", "card option");
-  const head = el("div", "opt-head");
-  head.appendChild(el("h3", null, `${i + 1}. ${opt.title}`));
-  const dlMd = el("button", "ghost small", "Download .md");
-  dlMd.addEventListener("click", () => downloadOption(opt, i, "md"));
-  const dlDocx = el("button", "ghost small", "Download .docx");
-  dlDocx.addEventListener("click", () => downloadOption(opt, i, "docx"));
-  const dlWrap = el("div", "dl-wrap");
-  dlWrap.append(dlMd, dlDocx);
-  head.appendChild(dlWrap);
-  card.appendChild(head);
-
-  if (opt.angle) card.appendChild(el("p", "angle", opt.angle));
-
-  card.appendChild(section("Scenario", opt.scenario));
-  card.appendChild(section("Brief", opt.brief));
-  card.appendChild(section("Deliverable", opt.deliverable));
+function optionSections(opt) {
+  const frag = document.createDocumentFragment();
+  if (opt.angle) frag.appendChild(el("p", "angle", opt.angle));
+  frag.appendChild(section("Scenario", opt.scenario));
+  frag.appendChild(section("Brief", opt.brief));
+  frag.appendChild(section("Deliverable", opt.deliverable));
 
   const lbs = el("div", "block");
   lbs.appendChild(el("h4", null, "Load-bearing specifics"));
@@ -168,16 +172,16 @@ function optionCard(opt, i) {
     ul.appendChild(li);
   });
   lbs.appendChild(ul);
-  card.appendChild(lbs);
+  frag.appendChild(lbs);
 
   const rb = el("div", "block");
   rb.appendChild(el("h4", null, "Rubric (1–5)"));
   const rul = el("ul", "rubric");
   (opt.rubric || []).forEach((r) => rul.appendChild(el("li", null, `${r.score} — ${r.descriptor}`)));
   rb.appendChild(rul);
-  card.appendChild(rb);
+  frag.appendChild(rb);
 
-  card.appendChild(section("Why it works", opt.why_it_works));
+  frag.appendChild(section("Why it works", opt.why_it_works));
 
   const ck = el("div", "block");
   ck.appendChild(el("h4", null, "Pre-pilot checklist"));
@@ -188,9 +192,40 @@ function optionCard(opt, i) {
     cul.appendChild(li);
   });
   ck.appendChild(cul);
-  card.appendChild(ck);
+  frag.appendChild(ck);
+  return frag;
+}
 
-  return card;
+function downloadButtons(opt, i) {
+  const dl = el("div", "dl-wrap");
+  const md = el("button", "ghost small", "Download .md");
+  md.addEventListener("click", (e) => { e.stopPropagation(); downloadOption(opt, i, "md"); });
+  const dx = el("button", "ghost small", "Download .docx");
+  dx.addEventListener("click", (e) => { e.stopPropagation(); downloadOption(opt, i, "docx"); });
+  dl.append(md, dx);
+  return dl;
+}
+
+function accordionItem(opt, i) {
+  const item = el("div", "card acc-item" + (i === 0 ? " open" : ""));
+  const head = el("div", "acc-head");
+  const title = el("div", "acc-title");
+  title.appendChild(el("h3", null, `${i + 1}. ${opt.title}`));
+  if (opt.angle) title.appendChild(el("p", "angle", opt.angle));
+  const right = el("div", "acc-right");
+  right.appendChild(downloadButtons(opt, i));
+  right.appendChild(el("span", "chev", i === 0 ? "▾" : "▸"));
+  head.appendChild(title);
+  head.appendChild(right);
+  head.addEventListener("click", () => {
+    const open = item.classList.toggle("open");
+    right.querySelector(".chev").textContent = open ? "▾" : "▸";
+  });
+  const body = el("div", "acc-body");
+  body.appendChild(optionSections(opt));
+  item.appendChild(head);
+  item.appendChild(body);
+  return item;
 }
 
 function section(title, body) {
