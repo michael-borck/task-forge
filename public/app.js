@@ -35,7 +35,7 @@ $("file").addEventListener("change", async (e) => {
 
 async function extractText(file) {
   const name = file.name.toLowerCase();
-  if (name.endsWith(".txt") || name.endsWith(".md")) return await file.text();
+  if (name.endsWith(".txt") || name.endsWith(".md") || name.endsWith(".qmd")) return await file.text();
   if (name.endsWith(".docx")) {
     const buf = await file.arrayBuffer();
     const { value } = await window.mammoth.extractRawText({ arrayBuffer: buf });
@@ -52,7 +52,7 @@ async function extractText(file) {
     }
     return out;
   }
-  throw new Error("Unsupported file type (use .docx, .pdf, .txt, or .md).");
+  throw new Error("Unsupported file type (use .docx, .pdf, .txt, .md, or .qmd).");
 }
 
 // --- API calls ---
