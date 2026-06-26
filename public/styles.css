@@ -57,6 +57,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .hidden { display: none; }
 .summary { font-size: 17px; margin: 6px 0 16px; padding: 0 2px; }
 .option .opt-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.dl-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
 .option h3 { margin: 0; }
 .angle { color: var(--muted); margin: 2px 0 10px; font-style: italic; }
 .block { margin-top: 14px; }

@@ -143,9 +143,13 @@ function optionCard(opt, i) {
   const card = el("div", "card option");
   const head = el("div", "opt-head");
   head.appendChild(el("h3", null, `${i + 1}. ${opt.title}`));
-  const dl = el("button", "ghost small", "Download .md");
-  dl.addEventListener("click", () => downloadOption(opt, i));
-  head.appendChild(dl);
+  const dlMd = el("button", "ghost small", "Download .md");
+  dlMd.addEventListener("click", () => downloadOption(opt, i, "md"));
+  const dlDocx = el("button", "ghost small", "Download .docx");
+  dlDocx.addEventListener("click", () => downloadOption(opt, i, "docx"));
+  const dlWrap = el("div", "dl-wrap");
+  dlWrap.append(dlMd, dlDocx);
+  head.appendChild(dlWrap);
   card.appendChild(head);
 
   if (opt.angle) card.appendChild(el("p", "angle", opt.angle));
@@ -235,14 +239,64 @@ ${checklist}
 `;
 }
 
-function downloadOption(opt, i) {
-  const md = optionToMarkdown(opt);
+async function downloadOption(opt, i, fmt) {
   const slug = (opt.title || `task-${i + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  const blob = new Blob([md], { type: "text/markdown" });
+  const filename = `task-design-${slug}.${fmt}`;
+  try {
+    const blob =
+      fmt === "docx"
+        ? await optionToDocxBlob(opt)
+        : new Blob([optionToMarkdown(opt)], { type: "text/markdown" });
+    saveBlob(blob, filename);
+  } catch (err) {
+    console.error(err);
+    alert(`Could not create ${filename}: ${err.message}`);
+  }
+}
+
+function saveBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `task-design-${slug}.md`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// Real .docx built in the browser via the `docx` library. Lazy-imported so a CDN
+// failure can't break the rest of the app — only this download fails (caught above).
+async function optionToDocxBlob(opt) {
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel } =
+    await import("https://esm.sh/docx@8.5.0");
+  const h = (text) => new Paragraph({ text, heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 80 } });
+  const para = (text) => new Paragraph({ children: [new TextRun(text || "")], spacing: { after: 80 } });
+  const bullet = (text) => new Paragraph({ text, bullet: { level: 0 }, spacing: { after: 40 } });
+  const boldBullet = (label, rest) =>
+    new Paragraph({
+      bullet: { level: 0 },
+      spacing: { after: 40 },
+      children: [new TextRun({ text: label, bold: true }), new TextRun({ text: ` — ${rest}` })],
+    });
+
+  const children = [];
+  children.push(new Paragraph({ text: opt.title || "Task design", heading: HeadingLevel.HEADING_1 }));
+  if (opt.angle) children.push(new Paragraph({ children: [new TextRun({ text: opt.angle, italics: true })], spacing: { after: 120 } }));
+  children.push(h("Scenario"), para(opt.scenario));
+  children.push(h("Brief"), para(opt.brief));
+  children.push(h("Deliverable"), para(opt.deliverable));
+  children.push(h("Load-bearing specifics"));
+  (opt.load_bearing_specifics || []).forEach((s) => children.push(boldBullet(s.detail, s.why_generic_answers_miss_it)));
+  children.push(h("Rubric (1–5)"));
+  (opt.rubric || []).forEach((r) => children.push(bullet(`${r.score}. ${r.descriptor}`)));
+  children.push(h("Why it works"), para(opt.why_it_works));
+  children.push(h("Pre-pilot checklist"));
+  (opt.checklist || []).forEach((c) => children.push(bullet(`${c.status === "ok" ? "✓" : "⚠"} ${c.item}${c.note ? ` — ${c.note}` : ""}`)));
+  children.push(
+    new Paragraph({
+      spacing: { before: 200 },
+      children: [new TextRun({ text: "Draft from Task Forge for the keep-asking study (HREC 83897). Review and sign off before piloting.", italics: true, color: "666666" })],
+    }),
+  );
+
+  return await Packer.toBlob(new Document({ sections: [{ children }] }));
 }
