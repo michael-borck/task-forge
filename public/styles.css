@@ -38,7 +38,6 @@ input[type="text"], input[type="password"], textarea {
   color: var(--ink);
 }
 textarea { resize: vertical; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .row { display: flex; align-items: center; gap: 14px; margin-top: 14px; flex-wrap: wrap; }
 .row.between { justify-content: space-between; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
@@ -80,4 +79,3 @@ ul.checklist li.warn { color: var(--warn); }
 .acc-body { padding: 4px 18px 16px; }
 .acc-item:not(.open) .acc-body { display: none; }
 footer { padding: 24px 20px 40px; }
-@media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }

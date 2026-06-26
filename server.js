@@ -59,7 +59,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 // Generate or refine task designs. Stateless: the client owns the conversation.
-// Body: { history?: [{role, content}], kickoff?: {mode, unit, discipline, worksheetText}, instruction?, fast? }
+// Body: { history?: [{role, content}], kickoff?: {mode, worksheetText}, instruction?, fast? }
 app.post("/api/generate", rateGuard, async (req, res) => {
   try {
     const { history = [], kickoff, instruction, fast } = req.body || {};

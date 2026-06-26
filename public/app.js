@@ -91,7 +91,7 @@ $("go").addEventListener("click", async () => {
   }
   try {
     await runKickoff(
-      { mode, unit: $("unit").value, discipline: $("discipline").value, worksheetText },
+      { mode, worksheetText },
       $("status"),
     );
   } catch (err) {
