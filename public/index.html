@@ -16,21 +16,13 @@
 
     <main>
       <div class="actionbar">
-        <button id="btnGenerate" class="primary" title="Re-engineer the text in the box into 2–3 AI-task designs (appends to your list)">Generate</button>
-        <button id="btnAdd" class="ghost" title="Add the text in the box as your own existing task, verbatim — then stress-test it">Add idea</button>
+        <button id="btnGenerate" class="primary" title="Turn a worksheet into 2–3 AI-task designs (adds them to your list)">Generate</button>
+        <button id="btnAdd" class="ghost" title="Add a task you already have, as-is, then stress-test it">Add idea</button>
         <button id="btnClear" class="ghost" title="Wipe everything saved in this browser and start fresh">Clear all</button>
         <span class="sel" id="hint"></span>
         <button id="btnHelp" class="ghost small" title="Show tips for using Task Forge">Tips</button>
       </div>
 
-      <section class="card inputcard">
-        <label for="box">Worksheet or idea</label>
-        <textarea id="box" rows="5" placeholder="Paste a worksheet to Generate, or paste an existing AI task and ‘Add idea’. The box keeps its text so you can re-generate or swap in a new source."></textarea>
-        <div class="pillrow">
-          <input id="file" type="file" accept=".docx,.pdf,.txt,.md,.qmd" title="Load a .docx, .pdf, .txt, .md or .qmd file" />
-          <span class="filename" id="fileName"></span>
-        </div>
-      </section>
 
       <div id="ideas"></div>
     </main>
@@ -67,6 +59,24 @@
         <div class="row" style="justify-content:flex-end; gap:8px; margin-top:14px">
           <button id="refineCancel" class="ghost">Cancel</button>
           <button id="refineGo" class="primary">Refine</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- compose modal (Generate / Add idea) -->
+    <div class="overlay" id="composeOverlay" hidden>
+      <div class="card">
+        <h3 style="margin-top:0" id="composeTitle">Generate task designs</h3>
+        <p class="muted" id="composeSub" style="margin:0 0 10px"></p>
+        <label for="composeBox">Worksheet or idea</label>
+        <textarea id="composeBox" rows="7" placeholder="Paste a worksheet here, or use the file button below…"></textarea>
+        <div class="pillrow">
+          <input id="composeFile" type="file" accept=".docx,.pdf,.txt,.md,.qmd" title="Load a .docx, .pdf, .txt, .md or .qmd file" />
+          <span class="filename" id="composeFileName"></span>
+        </div>
+        <div class="row" style="justify-content:flex-end; gap:8px; margin-top:14px">
+          <button id="composeCancel" class="ghost">Cancel</button>
+          <button id="composeGo" class="primary">Generate</button>
         </div>
       </div>
     </div>

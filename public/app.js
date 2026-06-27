@@ -79,7 +79,7 @@ function setBusy(on) {
 
 // --- actions ---
 async function doGenerate() {
-  const t = $("box").value.trim();
+  const t = state.boxText.trim();
   if (!t) return;
   setBusy(true);
   try {
@@ -104,7 +104,7 @@ async function doGenerate() {
 }
 
 function doAdd() {
-  const t = $("box").value.trim();
+  const t = state.boxText.trim();
   if (!t) return;
   state.ideas.push({
     id: ++uidCounter,
@@ -116,6 +116,36 @@ function doAdd() {
   save();
   renderList();
   updateActions();
+}
+let composeMode = null;
+function openCompose(mode) {
+  composeMode = mode;
+  const add = mode === "add";
+  $("composeTitle").textContent = add ? "Add your own task" : "Generate task designs";
+  $("composeSub").textContent = add
+    ? "Paste a task you already have. It's added as-is, exactly as you write it — then stress-test it."
+    : "Paste a worksheet (or part of one). We'll re-engineer it into 2–3 AI-task designs you can refine.";
+  $("composeBox").value = state.boxText || "";
+  $("composeFile").value = "";
+  $("composeFileName").textContent = state.fileName ? `📄 ${state.fileName}` : "";
+  $("composeGo").textContent = add ? "Add this task" : "Generate";
+  $("composeOverlay").hidden = false;
+  setTimeout(() => $("composeBox").focus(), 40);
+}
+function closeCompose() {
+  $("composeOverlay").hidden = true;
+  composeMode = null;
+}
+async function doCompose() {
+  const t = $("composeBox").value.trim();
+  if (!t) { $("composeBox").focus(); return; }
+  const mode = composeMode;
+  state.boxText = t;
+  save();
+  $("composeOverlay").hidden = true;
+  composeMode = null;
+  if (mode === "add") doAdd();
+  else doGenerate();
 }
 
 async function doStress(id) {
@@ -144,7 +174,7 @@ function doDelete(id) {
 
 function doClear() {
   if (!confirm("Clear ALL saved work in this browser? This cannot be undone.")) return;
-  state = { boxText: $("box").value, fileName: state.fileName, ideas: [], visited: state.visited };
+  state = { boxText: state.boxText, fileName: state.fileName, ideas: [], visited: state.visited };
   save();
   renderList();
   updateActions();
@@ -348,22 +378,17 @@ function renderList() {
   const wrap = $("ideas");
   wrap.innerHTML = "";
   if (!state.ideas.length) {
-    wrap.appendChild(el("div", "empty", "No ideas yet. Paste a worksheet and Generate, or paste a task and Add idea."));
+    wrap.appendChild(el("div", "empty", "No ideas yet. Click Generate above to turn a worksheet into AI-task designs — or Add idea to drop in a task you already have."));
     return;
   }
   state.ideas.forEach((idea) => wrap.appendChild(renderIdea(idea)));
 }
 
 function updateActions() {
-  const boxHas = $("box").value.trim().length > 0;
-  $("btnGenerate").disabled = !boxHas;
-  $("btnAdd").disabled = !boxHas;
   $("btnClear").disabled = state.ideas.length === 0;
 }
 
 function render() {
-  $("box").value = state.boxText || "";
-  $("fileName").textContent = state.fileName ? `📄 ${state.fileName}` : "";
   renderList();
   updateActions();
 }
@@ -428,26 +453,28 @@ async function downloadIdea(idea, fmt) {
 }
 
 // --- wire up ---
-$("btnGenerate").addEventListener("click", doGenerate);
-$("btnAdd").addEventListener("click", doAdd);
+$("btnGenerate").addEventListener("click", () => openCompose("generate"));
+$("btnAdd").addEventListener("click", () => openCompose("add"));
 $("btnClear").addEventListener("click", doClear);
-$("box").addEventListener("input", () => { state.boxText = $("box").value; save(); updateActions(); });
-$("file").addEventListener("change", async (e) => {
+$("composeCancel").addEventListener("click", closeCompose);
+$("composeGo").addEventListener("click", doCompose);
+$("composeBox").addEventListener("input", () => { state.boxText = $("composeBox").value; });
+$("composeBox").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) doCompose(); });
+$("composeFile").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   setBusy(true);
   try {
     const text = await extractText(file);
-    $("box").value = text;
+    $("composeBox").value = text;
     state.boxText = text;
     state.fileName = file.name;
     save();
-    $("fileName").textContent = `📄 ${file.name}`;
+    $("composeFileName").textContent = `📄 ${file.name}`;
   } catch (err) {
     alert(err.message);
   } finally {
     setBusy(false);
-    updateActions();
     e.target.value = "";
   }
 });
