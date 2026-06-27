@@ -39,6 +39,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 /* action bar */
 .actionbar { position: sticky; top: 0; z-index: 20; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
 .actionbar .sel { margin-left: auto; font-size: 13px; color: var(--muted); }
+#hint.busy { font-size: 22px; line-height: 1; letter-spacing: 3px; color: var(--accent); }
 
 /* input card */
 .inputcard .pillrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }

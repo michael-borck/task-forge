@@ -65,13 +65,23 @@ async function api(path, body) {
   if (!res.ok) throw new Error(json.error || `Request failed (${res.status}).`);
   return json;
 }
-const setHint = (msg) => { $("hint").textContent = msg || ""; };
+let busyTimer = null;
+function setBusy(on) {
+  if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }
+  const h = $("hint");
+  if (!on) { h.classList.remove("busy"); h.textContent = ""; return; }
+  h.classList.add("busy");
+  let n = 0;
+  const tick = () => { n = (n % 4) + 1; h.textContent = ".".repeat(n); };
+  tick();
+  busyTimer = setInterval(tick, 400);
+}
 
 // --- actions ---
 async function doGenerate() {
   const t = $("box").value.trim();
   if (!t) return;
-  setHint("Generating… (this can take 20–40s)");
+  setBusy(true);
   try {
     const { data } = await api("/api/generate", { kickoff: { worksheetText: t } });
     const fresh = (data.options || []).map((opt) => ({
@@ -88,7 +98,7 @@ async function doGenerate() {
   } catch (e) {
     alert(e.message);
   } finally {
-    setHint("");
+    setBusy(false);
     updateActions();
   }
 }
@@ -111,7 +121,7 @@ function doAdd() {
 async function doStress(id) {
   const idea = find(id);
   if (!idea) return;
-  setHint("Stress-testing…");
+  setBusy(true);
   try {
     const { result } = await api("/api/stress", { idea: idea.content });
     idea.stress = result;
@@ -121,7 +131,7 @@ async function doStress(id) {
   } catch (e) {
     alert(e.message);
   } finally {
-    setHint("");
+    setBusy(false);
   }
 }
 
@@ -146,7 +156,7 @@ async function doRefineGo() {
   const idea = find(refineTargetId);
   if (!idea) { closeRefine(); return; }
   $("refineGo").disabled = true;
-  setHint("Refining…");
+  setBusy(true);
   try {
     const { idea: revised } = await api("/api/refine", { idea: idea.content, instruction: instr });
     idea.content = revised;
@@ -161,7 +171,7 @@ async function doRefineGo() {
     alert(e.message);
   } finally {
     $("refineGo").disabled = false;
-    setHint("");
+    setBusy(false);
   }
 }
 function openRefine(id) {
@@ -425,7 +435,7 @@ $("box").addEventListener("input", () => { state.boxText = $("box").value; save(
 $("file").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  setHint("Reading file…");
+  setBusy(true);
   try {
     const text = await extractText(file);
     $("box").value = text;
@@ -436,7 +446,7 @@ $("file").addEventListener("change", async (e) => {
   } catch (err) {
     alert(err.message);
   } finally {
-    setHint("");
+    setBusy(false);
     updateActions();
     e.target.value = "";
   }
@@ -446,5 +456,6 @@ $("refineGo").addEventListener("click", doRefineGo);
 $("refineInstr").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) doRefineGo(); });
 if (!state.visited) { $("overlay").hidden = false; }
 $("btnDismiss").addEventListener("click", () => { state.visited = true; save(); $("overlay").hidden = true; });
+$("btnHelp").addEventListener("click", () => { $("overlay").hidden = false; });
 
 render();

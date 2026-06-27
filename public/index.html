@@ -26,6 +26,7 @@
         <button id="btnAdd" class="ghost" title="Add the text in the box as your own existing task, verbatim — then stress-test it">Add idea</button>
         <button id="btnClear" class="ghost" title="Wipe everything saved in this browser and start fresh">Clear all</button>
         <span class="sel" id="hint"></span>
+        <button id="btnHelp" class="ghost small" title="Show the how-to guide again">Help</button>
       </div>
 
       <section class="card inputcard">
@@ -47,14 +48,15 @@
     <!-- first-visit workflow overlay -->
     <div class="overlay" id="overlay" hidden>
       <div class="card">
-        <h3 style="margin-top:0">How to use Task Forge</h3>
-        <p class="muted">Adapt your existing tutorial ideas into AI-assisted lab tasks.</p>
+        <h3 style="margin-top:0">Welcome to Task Forge</h3>
+        <p>Turn one of your existing worksheets or tutorial ideas into an AI-assisted lab task for the <strong>keep-asking</strong> study.</p>
+        <p class="muted">Everything here is a <em>suggestion</em>, not a required format — you're in charge. Use what helps, ignore what doesn't, and keep your own approach. These are starting points, not a template you must follow.</p>
+        <p class="muted"><strong>A few ways to use it:</strong></p>
         <ul>
-          <li><b>Generate</b> a worksheet into 2–3 AI-task designs, <b>or</b> <b>Add idea</b> to drop in a task you already wrote. Both <i>append</i> to your list.</li>
-          <li>Each idea is managed on its own card: open it to see the task design, then <b>Refine</b>, <b>Stress test</b>, or <b>Delete</b> that idea.</li>
-          <li><b>Stress test</b> flags where a generic AI answer might already suffice — for your awareness, not required changes.</li>
-          <li>The box keeps its text, so you can re-generate or paste/upload a new source and keep going.</li>
-          <li>Everything saves in <i>this browser</i>. <b>Clear all</b> to restart.</li>
+          <li><b>Generate</b> turns a worksheet into 2–3 starting-point task designs. <b>Add idea</b> drops in a task you already wrote. Both just <i>add to your list</i> — keep, change, or delete whatever you like.</li>
+          <li>Open any idea to read it, then <b>Refine</b> it in your own words, <b>Stress test</b> it, or download it as Markdown or Word.</li>
+          <li><b>Stress test</b> only points out where a generic AI answer might already do the work — so <i>you</i> can decide if that matters. It's not telling you to change anything.</li>
+          <li>Build up ideas across your tutorials; your list is saved in this browser. <b>Clear all</b> starts fresh.</li>
         </ul>
         <div class="row" style="justify-content:flex-end"><button id="btnDismiss" class="primary">Got it</button></div>
       </div>
