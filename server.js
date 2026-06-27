@@ -11,7 +11,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // --- config (all from .env) ---
 const PORT = process.env.PORT || 8080;
 const MODEL = process.env.MODEL || "claude-sonnet-4-6"; // quality generation
-const FAST_MODEL = process.env.FAST_MODEL || "claude-haiku-4-5"; // quick iteration
 const MAX_REQUESTS_PER_DAY = Number(process.env.MAX_REQUESTS_PER_DAY || 100); // per IP
 const DAILY_TOKEN_CAP = Number(process.env.DAILY_TOKEN_CAP || 2_000_000); // global output-token ceiling
 const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 60_000); // ~ guard on pasted/parsed text
@@ -55,14 +54,14 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.static(join(__dirname, "public")));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, model: MODEL, fastModel: FAST_MODEL });
+  res.json({ ok: true, model: MODEL });
 });
 
 // Generate or refine task designs. Stateless: the client owns the conversation.
-// Body: { history?: [{role, content}], kickoff?: {mode, worksheetText}, instruction?, fast? }
+// Body: { history?: [{role, content}], kickoff?: {mode, worksheetText}, instruction? }
 app.post("/api/generate", rateGuard, async (req, res) => {
   try {
-    const { history = [], kickoff, instruction, fast } = req.body || {};
+    const { history = [], kickoff, instruction } = req.body || {};
     const messages = Array.isArray(history) ? [...history] : [];
 
     if (kickoff) {
@@ -81,9 +80,8 @@ app.post("/api/generate", rateGuard, async (req, res) => {
       return res.status(400).json({ error: "Nothing to do: provide a kickoff or an instruction." });
     }
 
-    const model = fast ? FAST_MODEL : MODEL;
     const resp = await client.messages.create({
-      model,
+      model: MODEL,
       max_tokens: 8000,
       system: SYSTEM_PROMPT,
       messages,
@@ -106,7 +104,7 @@ app.post("/api/generate", rateGuard, async (req, res) => {
     res.json({
       data,
       assistant: { role: "assistant", content: textBlock.text },
-      model,
+      model: MODEL,
       usage: resp.usage,
     });
   } catch (err) {
@@ -122,5 +120,5 @@ app.post("/api/generate", rateGuard, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Task Forge listening on :${PORT} (model=${MODEL}, fast=${FAST_MODEL})`);
+  console.log(`Task Forge listening on :${PORT} (model=${MODEL})`);
 });

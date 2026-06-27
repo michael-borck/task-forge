@@ -76,7 +76,7 @@ async function callApi(body, statusEl) {
 async function runKickoff(kickoff, statusEl) {
   history = [];
   lastKickoff = kickoff;
-  const data = await callApi({ kickoff, fast: $("fast").checked }, statusEl);
+  const data = await callApi({ kickoff }, statusEl);
   render(data);
   $("inputCard").classList.add("hidden");
   $("results").classList.remove("hidden");
@@ -106,7 +106,7 @@ $("refine").addEventListener("click", async () => {
     return;
   }
   try {
-    const data = await callApi({ history, instruction, fast: $("fast").checked }, $("status2"));
+    const data = await callApi({ history, instruction }, $("status2"));
     render(data);
     $("instruction").value = "";
   } catch (err) {
