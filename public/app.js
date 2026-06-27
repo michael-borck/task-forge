@@ -207,14 +207,14 @@ function downloadButtons(opt, i) {
 }
 
 function accordionItem(opt, i) {
-  const item = el("div", "card acc-item" + (i === 0 ? " open" : ""));
+  const item = el("div", "card acc-item");
   const head = el("div", "acc-head");
   const title = el("div", "acc-title");
   title.appendChild(el("h3", null, `${i + 1}. ${opt.title}`));
   if (opt.angle) title.appendChild(el("p", "angle", opt.angle));
   const right = el("div", "acc-right");
   right.appendChild(downloadButtons(opt, i));
-  right.appendChild(el("span", "chev", i === 0 ? "▾" : "▸"));
+  right.appendChild(el("span", "chev", "▸"));
   head.appendChild(title);
   head.appendChild(right);
   head.addEventListener("click", () => {
