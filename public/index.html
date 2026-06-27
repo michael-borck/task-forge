@@ -13,58 +13,66 @@
     <header>
       <h1>Task Forge</h1>
       <p class="sub">
-        Turn a worksheet into an AI-assisted lab task for the <strong>keep-asking</strong> study —
-        or stress-test a task you already have. Nothing you upload leaves your computer except the
-        text sent to the AI; nothing is stored on the server.
+        Turn a worksheet into AI-assisted lab tasks for the <strong>keep-asking</strong> study —
+        or drop in a task you already have and stress-test it. Build up a list of ideas and manage
+        each one. Nothing you upload leaves your computer except the text sent to the AI; your list
+        is saved in this browser.
       </p>
     </header>
 
     <main>
-      <section id="inputCard" class="card">
-        <div class="row">
-          <label>What do you have?</label>
-          <div class="seg">
-            <button type="button" class="seg-btn active" data-mode="generate">A worksheet to convert</button>
-            <button type="button" class="seg-btn" data-mode="refit">A task idea to stress-test</button>
-          </div>
-        </div>
+      <div class="actionbar">
+        <button id="btnGenerate" class="primary" title="Re-engineer the text in the box into 2–3 AI-task designs (appends to your list)">Generate</button>
+        <button id="btnAdd" class="ghost" title="Add the text in the box as your own existing task, verbatim — then stress-test it">Add idea</button>
+        <button id="btnClear" class="ghost" title="Wipe everything saved in this browser and start fresh">Clear all</button>
+        <span class="sel" id="hint"></span>
+      </div>
 
-        <label for="source">Paste the worksheet / idea, or drop a file</label>
-        <textarea id="source" rows="9" placeholder="Paste text here, or use the file button below…"></textarea>
-
-        <div class="row between">
-          <div class="filewrap">
-            <input id="file" type="file" accept=".docx,.pdf,.txt,.md,.qmd" />
-            <span id="fileStatus" class="muted"></span>
-          </div>
-        </div>
-
-        <div class="row">
-          <button id="go" class="primary">Generate task designs</button>
-          <span id="status" class="muted"></span>
+      <section class="card inputcard">
+        <label for="box">Worksheet or idea</label>
+        <textarea id="box" rows="5" placeholder="Paste a worksheet to Generate, or paste an existing AI task and ‘Add idea’. The box keeps its text so you can re-generate or swap in a new source."></textarea>
+        <div class="pillrow">
+          <input id="file" type="file" accept=".docx,.pdf,.txt,.md,.qmd" title="Load a .docx, .pdf, .txt, .md or .qmd file" />
+          <span class="filename" id="fileName"></span>
         </div>
       </section>
 
-      <section id="results" class="hidden">
-        <div class="card iterate">
-          <label for="instruction">Iterate — tell the AI what to change</label>
-          <textarea id="instruction" rows="3" placeholder="e.g. Make option 2 harder; add a conflicting stakeholder. Or: tailor option 1 to a regional hospital."></textarea>
-          <div class="row">
-            <button id="refine" class="primary">Refine</button>
-            <button id="tryAgain" class="ghost">Try again</button>
-            <button id="startOver" class="ghost">Start over</button>
-            <span id="status2" class="muted"></span>
-          </div>
-        </div>
-
-        <div id="summary" class="summary"></div>
-        <div id="options"></div>
-      </section>
+      <div id="ideas"></div>
     </main>
 
     <footer>
       <span class="muted">keep-asking · HREC 83897 · task designs are drafts for the team to refine and sign off.</span>
     </footer>
+
+    <!-- first-visit workflow overlay -->
+    <div class="overlay" id="overlay" hidden>
+      <div class="card">
+        <h3 style="margin-top:0">How to use Task Forge</h3>
+        <p class="muted">Adapt your existing tutorial ideas into AI-assisted lab tasks.</p>
+        <ul>
+          <li><b>Generate</b> a worksheet into 2–3 AI-task designs, <b>or</b> <b>Add idea</b> to drop in a task you already wrote. Both <i>append</i> to your list.</li>
+          <li>Each idea is managed on its own card: open it to see the task design, then <b>Refine</b>, <b>Stress test</b>, or <b>Delete</b> that idea.</li>
+          <li><b>Stress test</b> flags where a generic AI answer might already suffice — for your awareness, not required changes.</li>
+          <li>The box keeps its text, so you can re-generate or paste/upload a new source and keep going.</li>
+          <li>Everything saves in <i>this browser</i>. <b>Clear all</b> to restart.</li>
+        </ul>
+        <div class="row" style="justify-content:flex-end"><button id="btnDismiss" class="primary">Got it</button></div>
+      </div>
+    </div>
+
+    <!-- per-idea refine modal -->
+    <div class="overlay" id="refineOverlay" hidden>
+      <div class="card">
+        <h3 style="margin-top:0">Refine this idea</h3>
+        <p class="muted" id="refineTitle" style="margin:0 0 10px"></p>
+        <label for="refineInstr">What should change?</label>
+        <textarea id="refineInstr" rows="3" placeholder="e.g. Make it harder; add a conflicting stakeholder; tailor to a regional hospital."></textarea>
+        <div class="row" style="justify-content:flex-end; gap:8px; margin-top:14px">
+          <button id="refineCancel" class="ghost">Cancel</button>
+          <button id="refineGo" class="primary">Refine</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="app.js"></script>
   </body>

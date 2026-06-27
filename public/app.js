@@ -3,335 +3,448 @@ pdfjs.GlobalWorkerOptions.workerSrc =
   "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs";
 
 const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+};
 
-// --- state ---
-let mode = "generate";
-let history = []; // [{role, content}] — conversation with the model
-let lastKickoff = null; // last kickoff sent — "Try again" reuses it for a fresh guess
+const DISCLAIMER =
+  "Stress-test results flag where a generic AI answer might already cover the task, or where it could better reward students questioning the AI. These are prompts for your awareness — not required fixes — and anything highlighted may be an intentional part of your design. Keep what's deliberate.";
 
-// --- mode toggle ---
-document.querySelectorAll(".seg-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".seg-btn").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    mode = btn.dataset.mode;
-    $("go").textContent = mode === "refit" ? "Stress-test & improve" : "Generate task designs";
-  });
-});
+// --- workspace state (persisted per-browser) ---
+const KEY = "tf-workspace";
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    return s && Array.isArray(s.ideas) ? s : null;
+  } catch {
+    return null;
+  }
+}
+function save() {
+  localStorage.setItem(KEY, JSON.stringify(state));
+}
+let state = load() || { boxText: "", fileName: null, ideas: [], visited: false };
+let openSet = new Set(); // open-accordion keys; survives re-renders
+let uidCounter = state.ideas.reduce((m, i) => Math.max(m, i.id || 0), 0);
+let refineTargetId = null;
+const find = (id) => state.ideas.find((i) => i.id === id);
 
 // --- file parsing (in browser; raw file never leaves the machine) ---
-$("file").addEventListener("change", async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  $("fileStatus").textContent = `Reading ${file.name}…`;
-  try {
-    const text = await extractText(file);
-    $("source").value = text.trim();
-    $("fileStatus").textContent = `Loaded ${file.name} (${text.length.toLocaleString()} chars). Edit if needed.`;
-  } catch (err) {
-    console.error(err);
-    $("fileStatus").textContent = `Could not read ${file.name}: ${err.message}`;
-  }
-});
-
 async function extractText(file) {
   const name = file.name.toLowerCase();
   if (name.endsWith(".txt") || name.endsWith(".md") || name.endsWith(".qmd")) return await file.text();
   if (name.endsWith(".docx")) {
     const buf = await file.arrayBuffer();
-    const { value } = await window.mammoth.extractRawText({ arrayBuffer: buf });
+    const { value } = await mammoth.extractRawText({ arrayBuffer: buf });
     return value;
   }
   if (name.endsWith(".pdf")) {
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjs.getDocument({ data: buf }).promise;
+    const data = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data }).promise;
     let out = "";
-    for (let p = 1; p <= pdf.numPages; p++) {
-      const page = await pdf.getPage(p);
-      const content = await page.getTextContent();
-      out += content.items.map((i) => i.str).join(" ") + "\n\n";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await (await pdf.getPage(i)).getTextContent();
+      out += page.items.map((it) => it.str).join(" ") + "\n";
     }
     return out;
   }
   throw new Error("Unsupported file type (use .docx, .pdf, .txt, .md, or .qmd).");
 }
 
-// --- API calls ---
-async function callApi(body, statusEl) {
-  statusEl.textContent = "Thinking… (this can take 20–40s)";
-  const res = await fetch("/api/generate", {
+// --- API ---
+async function api(path, body) {
+  const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || `Request failed (${res.status}).`);
-  statusEl.textContent = `Done · ${json.model}`;
-  history.push(json.assistant);
-  return json.data;
+  return json;
+}
+const setHint = (msg) => { $("hint").textContent = msg || ""; };
+
+// --- actions ---
+async function doGenerate() {
+  const t = $("box").value.trim();
+  if (!t) return;
+  setHint("Generating… (this can take 20–40s)");
+  try {
+    const { data } = await api("/api/generate", { kickoff: { worksheetText: t } });
+    const fresh = (data.options || []).map((opt) => ({
+      id: ++uidCounter,
+      title: opt.title || "Task design",
+      kind: "generated",
+      content: opt,
+      stress: null,
+    }));
+    if (!fresh.length) throw new Error("No ideas returned. Try again.");
+    state.ideas.push(...fresh);
+    save();
+    renderList();
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    setHint("");
+    updateActions();
+  }
 }
 
-// Shared by "Generate" (Go) and "Try again": reset history and kick off a fresh
-// generation. Go reads the form; Try again reuses the last kickoff verbatim.
-async function runKickoff(kickoff, statusEl) {
-  history = [];
-  lastKickoff = kickoff;
-  const data = await callApi({ kickoff }, statusEl);
-  render(data);
-  $("inputCard").classList.add("hidden");
-  $("results").classList.remove("hidden");
-  $("results").scrollIntoView({ behavior: "smooth" });
+function doAdd() {
+  const t = $("box").value.trim();
+  if (!t) return;
+  state.ideas.push({
+    id: ++uidCounter,
+    title: (t.slice(0, 60).trim() + (t.length > 60 ? "…" : "")) || "My task",
+    kind: "imported",
+    content: { freeText: t },
+    stress: null,
+  });
+  save();
+  renderList();
+  updateActions();
 }
 
-$("go").addEventListener("click", async () => {
-  const worksheetText = $("source").value;
-  if (!worksheetText.trim()) {
-    $("status").textContent = "Paste some text or load a file first.";
-    return;
-  }
+async function doStress(id) {
+  const idea = find(id);
+  if (!idea) return;
+  setHint("Stress-testing…");
   try {
-    await runKickoff(
-      { mode, worksheetText },
-      $("status"),
-    );
-  } catch (err) {
-    $("status").textContent = err.message;
+    const { result } = await api("/api/stress", { idea: idea.content });
+    idea.stress = result;
+    openSet.add("stress-" + id);
+    save();
+    renderList();
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    setHint("");
   }
-});
+}
 
-$("refine").addEventListener("click", async () => {
-  const instruction = $("instruction").value;
-  if (!instruction.trim()) {
-    $("status2").textContent = "Type what to change.";
-    return;
-  }
+function doDelete(id) {
+  state.ideas = state.ideas.filter((i) => i.id !== id);
+  save();
+  renderList();
+  updateActions();
+}
+
+function doClear() {
+  if (!confirm("Clear ALL saved work in this browser? This cannot be undone.")) return;
+  state = { boxText: $("box").value, fileName: state.fileName, ideas: [], visited: state.visited };
+  save();
+  renderList();
+  updateActions();
+}
+
+async function doRefineGo() {
+  const instr = $("refineInstr").value.trim();
+  if (!instr || refineTargetId == null) return;
+  const idea = find(refineTargetId);
+  if (!idea) { closeRefine(); return; }
+  $("refineGo").disabled = true;
+  setHint("Refining…");
   try {
-    const data = await callApi({ history, instruction }, $("status2"));
-    render(data);
-    $("instruction").value = "";
-  } catch (err) {
-    $("status2").textContent = err.message;
+    const { idea: revised } = await api("/api/refine", { idea: idea.content, instruction: instr });
+    idea.content = revised;
+    if (revised && revised.title) idea.title = revised.title;
+    idea.stress = null;
+    openSet.add("wrap-" + idea.id);
+    openSet.add("idea-" + idea.id);
+    closeRefine();
+    save();
+    renderList();
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    $("refineGo").disabled = false;
+    setHint("");
   }
-});
-
-// "Try again" = a fresh guess from the same worksheet (new suggestions; current ones discarded).
-$("tryAgain").addEventListener("click", async () => {
-  if (!lastKickoff) return;
-  try {
-    await runKickoff(lastKickoff, $("status2"));
-  } catch (err) {
-    $("status2").textContent = err.message;
-  }
-});
-
-// "Start over" = back to the compose form. Fields stay pre-filled so the user can
-// tweak and regenerate, or clear the box for a brand-new task.
-$("startOver").addEventListener("click", () => {
-  history = [];
-  lastKickoff = null;
-  $("results").classList.add("hidden");
-  $("inputCard").classList.remove("hidden");
-  $("options").innerHTML = "";
-  $("summary").innerHTML = "";
-  $("status").textContent = "";
-  $("status2").textContent = "";
-  window.scrollTo({ top: 0, behavior: "smooth" });
-});
+}
+function openRefine(id) {
+  refineTargetId = id;
+  const idea = find(id);
+  $("refineTitle").textContent = idea ? idea.title : "";
+  $("refineInstr").value = "";
+  $("refineOverlay").hidden = false;
+  setTimeout(() => $("refineInstr").focus(), 40);
+}
+function closeRefine() {
+  $("refineOverlay").hidden = true;
+  refineTargetId = null;
+}
 
 // --- rendering ---
-let lastData = null;
-function render(data) {
-  lastData = data;
-  $("summary").textContent = data.summary || "";
-  const wrap = $("options");
-  wrap.innerHTML = "";
-  (data.options || []).forEach((opt, i) => wrap.appendChild(accordionItem(opt, i)));
-}
-
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-}
-
-function optionSections(opt) {
-  const frag = document.createDocumentFragment();
-  if (opt.angle) frag.appendChild(el("p", "angle", opt.angle));
-  frag.appendChild(section("Scenario", opt.scenario));
-  frag.appendChild(section("Brief", opt.brief));
-  frag.appendChild(section("Deliverable", opt.deliverable));
-
-  const lbs = el("div", "block");
-  lbs.appendChild(el("h4", null, "Load-bearing specifics"));
-  const ul = el("ul");
-  (opt.load_bearing_specifics || []).forEach((s) => {
-    const li = el("li");
-    li.appendChild(el("strong", null, s.detail));
-    li.appendChild(el("span", "muted", " — " + s.why_generic_answers_miss_it));
-    ul.appendChild(li);
-  });
-  lbs.appendChild(ul);
-  frag.appendChild(lbs);
-
-  const rb = el("div", "block");
-  rb.appendChild(el("h4", null, "Rubric (1–5)"));
-  const rul = el("ul", "rubric");
-  (opt.rubric || []).forEach((r) => rul.appendChild(el("li", null, `${r.score} — ${r.descriptor}`)));
-  rb.appendChild(rul);
-  frag.appendChild(rb);
-
-  frag.appendChild(section("Why it works", opt.why_it_works));
-
-  const ck = el("div", "block");
-  ck.appendChild(el("h4", null, "Pre-pilot checklist"));
-  const cul = el("ul", "checklist");
-  (opt.checklist || []).forEach((c) => {
-    const li = el("li", c.status === "ok" ? "ok" : "warn");
-    li.textContent = `${c.status === "ok" ? "✓" : "⚠"} ${c.item}${c.note ? " — " + c.note : ""}`;
-    cul.appendChild(li);
-  });
-  ck.appendChild(cul);
-  frag.appendChild(ck);
-  return frag;
-}
-
-function downloadButtons(opt, i) {
-  const dl = el("div", "dl-wrap");
-  const md = el("button", "ghost small", "Download .md");
-  md.addEventListener("click", (e) => { e.stopPropagation(); downloadOption(opt, i, "md"); });
-  const dx = el("button", "ghost small", "Download .docx");
-  dx.addEventListener("click", (e) => { e.stopPropagation(); downloadOption(opt, i, "docx"); });
-  dl.append(md, dx);
-  return dl;
-}
-
-function accordionItem(opt, i) {
-  const item = el("div", "card acc-item");
-  const head = el("div", "acc-head");
-  const title = el("div", "acc-title");
-  title.appendChild(el("h3", null, `${i + 1}. ${opt.title}`));
-  if (opt.angle) title.appendChild(el("p", "angle", opt.angle));
-  const right = el("div", "acc-right");
-  right.appendChild(downloadButtons(opt, i));
-  right.appendChild(el("span", "chev", "▸"));
-  head.appendChild(title);
-  head.appendChild(right);
-  head.addEventListener("click", () => {
-    const open = item.classList.toggle("open");
-    right.querySelector(".chev").textContent = open ? "▾" : "▸";
-  });
-  const body = el("div", "acc-body");
-  body.appendChild(optionSections(opt));
-  item.appendChild(head);
-  item.appendChild(body);
-  return item;
-}
-
-function section(title, body) {
+function block(title, body) {
   const b = el("div", "block");
   b.appendChild(el("h4", null, title));
   b.appendChild(el("p", null, body || ""));
   return b;
 }
 
-// --- markdown export (matches docs/task-design-template.md shape) ---
-function optionToMarkdown(opt) {
-  const lbs = (opt.load_bearing_specifics || [])
-    .map((s) => `- **${s.detail}** — ${s.why_generic_answers_miss_it}`)
-    .join("\n");
-  const rubric = (opt.rubric || []).map((r) => `${r.score}. ${r.descriptor}`).join("\n");
-  const checklist = (opt.checklist || [])
-    .map((c) => `- [${c.status === "ok" ? "x" : " "}] ${c.item}${c.note ? " — " + c.note : ""}`)
-    .join("\n");
-  return `# Task Design: ${opt.title}
-
-*${opt.angle || ""}*
-
-## Scenario
-${opt.scenario}
-
-## Brief
-${opt.brief}
-
-## Deliverable
-${opt.deliverable}
-
-## Load-bearing specifics
-${lbs}
-
-## Rubric (1–5)
-${rubric}
-
-## Why it works
-${opt.why_it_works}
-
-## Pre-pilot checklist
-${checklist}
-
----
-*Draft from Task Forge for the keep-asking study (HREC 83897). Review and sign off before piloting.*
-`;
+function contentBody(idea) {
+  const f = document.createDocumentFragment();
+  if (idea.content && idea.content.freeText) {
+    f.appendChild(block("Your task", idea.content.freeText));
+    return f;
+  }
+  const c = idea.content || {};
+  if (c.angle) f.appendChild(el("p", "angle", c.angle));
+  f.appendChild(block("Scenario", c.scenario));
+  f.appendChild(block("Brief", c.brief));
+  f.appendChild(block("Deliverable", c.deliverable));
+  const lbs = el("div", "block");
+  lbs.appendChild(el("h4", null, "Load-bearing specifics"));
+  const ul = el("ul");
+  (c.load_bearing_specifics || []).forEach((s) => {
+    const li = el("li");
+    li.appendChild(el("strong", null, s.detail));
+    li.appendChild(document.createTextNode(" — " + s.why_generic_answers_miss_it));
+    ul.appendChild(li);
+  });
+  lbs.appendChild(ul);
+  f.appendChild(lbs);
+  const rb = el("div", "block");
+  rb.appendChild(el("h4", null, "Rubric (1–5)"));
+  const rul = el("ul", "rubric");
+  (c.rubric || []).forEach((r) => rul.appendChild(el("li", null, `${r.score} — ${r.descriptor}`)));
+  rb.appendChild(rul);
+  f.appendChild(rb);
+  f.appendChild(block("Why it works", c.why_it_works));
+  const ck = el("div", "block");
+  ck.appendChild(el("h4", null, "Pre-pilot checklist"));
+  const cul = el("ul", "checklist");
+  (c.checklist || []).forEach((c2) => {
+    const li = el("li", c2.status === "ok" ? "ok" : "warn");
+    li.textContent = `${c2.status === "ok" ? "✓" : "⚠"} ${c2.item}${c2.note ? " — " + c2.note : ""}`;
+    cul.appendChild(li);
+  });
+  ck.appendChild(cul);
+  f.appendChild(ck);
+  return f;
 }
 
-async function downloadOption(opt, i, fmt) {
-  const slug = (opt.title || `task-${i + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  const filename = `task-design-${slug}.${fmt}`;
+function stressBody(s) {
+  const f = document.createDocumentFragment();
+  f.appendChild(block("Verdict", s.verdict));
+  const lbs = el("div", "block");
+  lbs.appendChild(el("h4", null, "Where it could bite harder"));
+  const ul = el("ul");
+  (s.specifics || []).forEach((x) => {
+    const li = el("li");
+    li.appendChild(el("strong", null, x.detail));
+    li.appendChild(document.createTextNode(" — " + x.why));
+    ul.appendChild(li);
+  });
+  lbs.appendChild(ul);
+  f.appendChild(lbs);
+  f.appendChild(block("Improved brief (optional)", s.improved_brief));
+  f.appendChild(el("p", "disclaimer", DISCLAIMER));
+  return f;
+}
+
+function toggle(key, node, chevEl) {
+  const open = node.classList.toggle("open");
+  if (open) openSet.add(key);
+  else openSet.delete(key);
+  if (chevEl) chevEl.textContent = open ? "▾" : "▸";
+}
+
+function renderIdea(idea) {
+  const wrap = el("div", "idea" + (openSet.has("wrap-" + idea.id) ? " open" : ""));
+  const head = el("div", "ihead");
+  const meta = el("div", "meta");
+  meta.appendChild(el("h3", null, idea.title));
+  meta.appendChild(el("p", "sub muted", idea.kind === "imported" ? "Your task (imported)" : idea.content && idea.content.angle || ""));
+  const acts = el("div", "acts");
+  acts.appendChild(el("span", "tag " + idea.kind, idea.kind === "imported" ? "Imported" : "Generated"));
+  const ref = el("button", "ghost small", "Refine");
+  ref.title = "Refine this idea with an instruction";
+  ref.addEventListener("click", (e) => { e.stopPropagation(); openRefine(idea.id); });
+  acts.appendChild(ref);
+  const del = el("button", "del", "Delete");
+  del.title = "Delete this idea";
+  del.addEventListener("click", (e) => { e.stopPropagation(); doDelete(idea.id); });
+  acts.appendChild(del);
+  acts.appendChild(el("span", "chev", openSet.has("wrap-" + idea.id) ? "▾" : "▸"));
+  head.appendChild(meta);
+  head.appendChild(acts);
+  head.addEventListener("click", () => toggle("wrap-" + idea.id, wrap, acts.querySelector(".chev")));
+
+  const body = el("div", "ibody");
+
+  // Idea sub-accordion (with downloads)
+  const ideaSub = el("div", "sub" + (openSet.has("idea-" + idea.id) ? " open" : ""));
+  const ish = el("div", "sub-head");
+  ish.appendChild(el("span", "lbl", "💡 Idea"));
+  const dl = el("div", "dl");
+  const md = el("button", "ghost small", ".md");
+  md.title = "Download as Markdown";
+  md.addEventListener("click", (e) => { e.stopPropagation(); downloadIdea(idea, "md"); });
+  const dx = el("button", "ghost small", ".docx");
+  dx.title = "Download as Word";
+  dx.addEventListener("click", (e) => { e.stopPropagation(); downloadIdea(idea, "docx"); });
+  dl.appendChild(md);
+  dl.appendChild(dx);
+  ish.appendChild(dl);
+  const ishChev = el("span", "chev", openSet.has("idea-" + idea.id) ? "▾" : "▸");
+  ish.appendChild(ishChev);
+  ish.addEventListener("click", () => toggle("idea-" + idea.id, ideaSub, ishChev));
+  const isb = el("div", "sub-body");
+  isb.appendChild(contentBody(idea));
+  ideaSub.appendChild(ish);
+  ideaSub.appendChild(isb);
+  body.appendChild(ideaSub);
+
+  // Stress block
+  const stress = el("div", "stress" + (idea.stress && openSet.has("stress-" + idea.id) ? " open" : ""));
+  const sh = el("div", "stress-head" + (idea.stress ? " clickable" : ""));
+  sh.appendChild(el("span", "lbl", "🧪 Stress test"));
+  if (idea.stress) {
+    sh.appendChild(el("span", "status done", "Done ✓"));
+    const rerun = el("button", "ghost small", "Re-run");
+    rerun.title = "Re-run the stress test (replaces the current result)";
+    rerun.addEventListener("click", (e) => { e.stopPropagation(); doStress(idea.id); });
+    sh.appendChild(rerun);
+    const shChev = el("span", "chev", openSet.has("stress-" + idea.id) ? "▾" : "▸");
+    sh.appendChild(shChev);
+    sh.addEventListener("click", () => toggle("stress-" + idea.id, stress, shChev));
+    const sb = el("div", "stress-body");
+    sb.appendChild(stressBody(idea.stress));
+    stress.appendChild(sh);
+    stress.appendChild(sb);
+  } else {
+    sh.appendChild(el("span", "status notrun", "Not run"));
+    const cta = el("button", "primary small", "Stress test this idea");
+    cta.title = "Run a stress test on this idea";
+    cta.addEventListener("click", (e) => { e.stopPropagation(); doStress(idea.id); });
+    sh.appendChild(cta);
+    stress.appendChild(sh);
+    const note = el("div", "stress-note");
+    note.appendChild(el("p", "disclaimer", DISCLAIMER));
+    stress.appendChild(note);
+  }
+  body.appendChild(stress);
+
+  wrap.appendChild(head);
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function renderList() {
+  const wrap = $("ideas");
+  wrap.innerHTML = "";
+  if (!state.ideas.length) {
+    wrap.appendChild(el("div", "empty", "No ideas yet. Paste a worksheet and Generate, or paste a task and Add idea."));
+    return;
+  }
+  state.ideas.forEach((idea) => wrap.appendChild(renderIdea(idea)));
+}
+
+function updateActions() {
+  const boxHas = $("box").value.trim().length > 0;
+  $("btnGenerate").disabled = !boxHas;
+  $("btnAdd").disabled = !boxHas;
+  $("btnClear").disabled = state.ideas.length === 0;
+}
+
+function render() {
+  $("box").value = state.boxText || "";
+  $("fileName").textContent = state.fileName ? `📄 ${state.fileName}` : "";
+  renderList();
+  updateActions();
+}
+
+// --- downloads (.md / .docx) ---
+function ideaToMarkdown(idea) {
+  if (idea.content && idea.content.freeText) return `# ${idea.title}\n\n${idea.content.freeText}\n`;
+  const c = idea.content || {};
+  let md = `# ${c.title || idea.title}\n\n`;
+  if (c.angle) md += `*${c.angle}*\n\n`;
+  md += `## Scenario\n${c.scenario}\n\n## Brief\n${c.brief}\n\n## Deliverable\n${c.deliverable}\n\n`;
+  md += `## Load-bearing specifics\n` + (c.load_bearing_specifics || []).map((s) => `- **${s.detail}** — ${s.why_generic_answers_miss_it}`).join("\n") + "\n\n";
+  md += `## Rubric\n` + (c.rubric || []).map((r) => `${r.score} — ${r.descriptor}`).join("\n") + "\n\n";
+  md += `## Why it works\n${c.why_it_works}\n\n`;
+  md += `## Pre-pilot checklist\n` + (c.checklist || []).map((c2) => `${c2.status === "ok" ? "✓" : "⚠"} ${c2.item}${c2.note ? " — " + c2.note : ""}`).join("\n");
+  return md;
+}
+
+async function ideaToDocxBlob(idea) {
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import("https://esm.sh/docx@8.5.0");
+  const h2 = (t) => new Paragraph({ text: t, heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 80 } });
+  const para = (t) => new Paragraph({ children: [new TextRun(t || "")], spacing: { after: 80 } });
+  const bullet = (t) => new Paragraph({ text: t, bullet: { level: 0 }, spacing: { after: 40 } });
+  const boldBullet = (l, r) => new Paragraph({ bullet: { level: 0 }, spacing: { after: 40 }, children: [new TextRun({ text: l, bold: true }), new TextRun({ text: ` — ${r}` })] });
+
+  const ch = [];
+  ch.push(new Paragraph({ text: idea.title, heading: HeadingLevel.HEADING_1 }));
+  if (idea.content && idea.content.freeText) {
+    ch.push(para(idea.content.freeText));
+  } else {
+    const c = idea.content || {};
+    if (c.angle) ch.push(new Paragraph({ children: [new TextRun({ text: c.angle, italics: true })], spacing: { after: 120 } }));
+    ch.push(h2("Scenario"), para(c.scenario));
+    ch.push(h2("Brief"), para(c.brief));
+    ch.push(h2("Deliverable"), para(c.deliverable));
+    ch.push(h2("Load-bearing specifics"));
+    (c.load_bearing_specifics || []).forEach((s) => ch.push(boldBullet(s.detail, s.why_generic_answers_miss_it)));
+    ch.push(h2("Rubric (1–5)"));
+    (c.rubric || []).forEach((r) => ch.push(bullet(`${r.score}. ${r.descriptor}`)));
+    ch.push(h2("Why it works"), para(c.why_it_works));
+    ch.push(h2("Pre-pilot checklist"));
+    (c.checklist || []).forEach((c2) => ch.push(bullet(`${c2.status === "ok" ? "✓" : "⚠"} ${c2.item}${c2.note ? " — " + c2.note : ""}`)));
+  }
+  ch.push(new Paragraph({ spacing: { before: 200 }, children: [new TextRun({ text: "Draft from Task Forge for the keep-asking study (HREC 83897). Review and sign off before piloting.", italics: true, color: "666666" })] }));
+  return await Packer.toBlob(new Document({ sections: [{ children: ch }] }));
+}
+
+async function downloadIdea(idea, fmt) {
+  const slug = ((idea.title || "task").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40)) || "task";
   try {
-    const blob =
-      fmt === "docx"
-        ? await optionToDocxBlob(opt)
-        : new Blob([optionToMarkdown(opt)], { type: "text/markdown" });
-    saveBlob(blob, filename);
+    const blob = fmt === "docx" ? await ideaToDocxBlob(idea) : new Blob([ideaToMarkdown(idea)], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `task-design-${slug}.${fmt}`;
+    a.click();
+    URL.revokeObjectURL(url);
   } catch (err) {
     console.error(err);
-    alert(`Could not create ${filename}: ${err.message}`);
+    alert(`Could not create .${fmt}: ${err.message}`);
   }
 }
 
-function saveBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+// --- wire up ---
+$("btnGenerate").addEventListener("click", doGenerate);
+$("btnAdd").addEventListener("click", doAdd);
+$("btnClear").addEventListener("click", doClear);
+$("box").addEventListener("input", () => { state.boxText = $("box").value; save(); updateActions(); });
+$("file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setHint("Reading file…");
+  try {
+    const text = await extractText(file);
+    $("box").value = text;
+    state.boxText = text;
+    state.fileName = file.name;
+    save();
+    $("fileName").textContent = `📄 ${file.name}`;
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setHint("");
+    updateActions();
+    e.target.value = "";
+  }
+});
+$("refineCancel").addEventListener("click", closeRefine);
+$("refineGo").addEventListener("click", doRefineGo);
+$("refineInstr").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) doRefineGo(); });
+if (!state.visited) { $("overlay").hidden = false; }
+$("btnDismiss").addEventListener("click", () => { state.visited = true; save(); $("overlay").hidden = true; });
 
-// Real .docx built in the browser via the `docx` library. Lazy-imported so a CDN
-// failure can't break the rest of the app — only this download fails (caught above).
-async function optionToDocxBlob(opt) {
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel } =
-    await import("https://esm.sh/docx@8.5.0");
-  const h = (text) => new Paragraph({ text, heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 80 } });
-  const para = (text) => new Paragraph({ children: [new TextRun(text || "")], spacing: { after: 80 } });
-  const bullet = (text) => new Paragraph({ text, bullet: { level: 0 }, spacing: { after: 40 } });
-  const boldBullet = (label, rest) =>
-    new Paragraph({
-      bullet: { level: 0 },
-      spacing: { after: 40 },
-      children: [new TextRun({ text: label, bold: true }), new TextRun({ text: ` — ${rest}` })],
-    });
-
-  const children = [];
-  children.push(new Paragraph({ text: opt.title || "Task design", heading: HeadingLevel.HEADING_1 }));
-  if (opt.angle) children.push(new Paragraph({ children: [new TextRun({ text: opt.angle, italics: true })], spacing: { after: 120 } }));
-  children.push(h("Scenario"), para(opt.scenario));
-  children.push(h("Brief"), para(opt.brief));
-  children.push(h("Deliverable"), para(opt.deliverable));
-  children.push(h("Load-bearing specifics"));
-  (opt.load_bearing_specifics || []).forEach((s) => children.push(boldBullet(s.detail, s.why_generic_answers_miss_it)));
-  children.push(h("Rubric (1–5)"));
-  (opt.rubric || []).forEach((r) => children.push(bullet(`${r.score}. ${r.descriptor}`)));
-  children.push(h("Why it works"), para(opt.why_it_works));
-  children.push(h("Pre-pilot checklist"));
-  (opt.checklist || []).forEach((c) => children.push(bullet(`${c.status === "ok" ? "✓" : "⚠"} ${c.item}${c.note ? ` — ${c.note}` : ""}`)));
-  children.push(
-    new Paragraph({
-      spacing: { before: 200 },
-      children: [new TextRun({ text: "Draft from Task Forge for the keep-asking study (HREC 83897). Review and sign off before piloting.", italics: true, color: "666666" })],
-    }),
-  );
-
-  return await Packer.toBlob(new Document({ sections: [{ children }] }));
-}
+render();

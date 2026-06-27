@@ -4,16 +4,25 @@ import Anthropic from "@anthropic-ai/sdk";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-import { SYSTEM_PROMPT, TASK_SCHEMA, buildKickoffMessage } from "./lib/prompts.js";
+import {
+  SYSTEM_PROMPT,
+  TASK_SCHEMA,
+  REFINE_SCHEMA,
+  FREETEXT_SCHEMA,
+  STRESS_SCHEMA,
+  buildKickoffMessage,
+  buildRefineMessage,
+  buildStressMessage,
+} from "./lib/prompts.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // --- config (all from .env) ---
 const PORT = process.env.PORT || 8080;
-const MODEL = process.env.MODEL || "claude-sonnet-4-6"; // quality generation
+const MODEL = process.env.MODEL || "claude-sonnet-4-6";
 const MAX_REQUESTS_PER_DAY = Number(process.env.MAX_REQUESTS_PER_DAY || 100); // per IP
 const DAILY_TOKEN_CAP = Number(process.env.DAILY_TOKEN_CAP || 2_000_000); // global output-token ceiling
-const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 60_000); // ~ guard on pasted/parsed text
+const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 60_000); // guard on pasted/parsed text
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error("FATAL: ANTHROPIC_API_KEY is not set. Put it in .env.");
@@ -33,11 +42,10 @@ function rateGuard(req, res, next) {
   if (day !== tokenDay) {
     tokenDay = day;
     tokensUsedToday = 0;
+    for (const k of ipCounts.keys()) if (k.endsWith(day)) ipCounts.delete(k);
   }
   if (tokensUsedToday >= DAILY_TOKEN_CAP) {
-    return res.status(503).json({
-      error: "Daily token budget reached. Try again tomorrow, or raise DAILY_TOKEN_CAP.",
-    });
+    return res.status(429).json({ error: "Daily token cap reached. Try again tomorrow." });
   }
   const ip = (req.headers["x-forwarded-for"]?.split(",")[0] || req.ip || "unknown").trim();
   const key = `${ip}:${day}`;
@@ -57,65 +65,103 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, model: MODEL });
 });
 
-// Generate or refine task designs. Stateless: the client owns the conversation.
-// Body: { history?: [{role, content}], kickoff?: {mode, worksheetText}, instruction? }
+// Call the model with a json_schema and return parsed JSON. Throws on upstream
+// errors (caught by handleModelError in each route).
+async function callModel(messages, schema) {
+  const resp = await client.messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    system: SYSTEM_PROMPT,
+    messages,
+    output_config: { format: { type: "json_schema", schema } },
+  });
+  tokensUsedToday += resp.usage?.output_tokens || 0;
+  const textBlock = resp.content.find((b) => b.type === "text");
+  if (!textBlock) {
+    const e = new Error("Model returned no text.");
+    e.statusCode = 502;
+    throw e;
+  }
+  try {
+    return JSON.parse(textBlock.text);
+  } catch {
+    const e = new Error("Model returned malformed JSON. Try again or rephrase.");
+    e.statusCode = 502;
+    throw e;
+  }
+}
+
+function handleModelError(res, err) {
+  if (err instanceof Anthropic.RateLimitError) {
+    return res.status(429).json({ error: "Upstream rate limit. Wait a moment and retry." });
+  }
+  if (err instanceof Anthropic.APIError) {
+    return res.status(502).json({ error: `Model error: ${err.message}` });
+  }
+  if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+  console.error(err);
+  res.status(500).json({ error: "Unexpected server error." });
+}
+
+// Re-engineer a worksheet into 2-3 task designs.
+// Body: { kickoff: { worksheetText } } -> { data: { summary, options } }
 app.post("/api/generate", rateGuard, async (req, res) => {
   try {
-    const { history = [], kickoff, instruction } = req.body || {};
-    const messages = Array.isArray(history) ? [...history] : [];
-
-    if (kickoff) {
-      if (!kickoff.worksheetText || !kickoff.worksheetText.trim()) {
-        return res.status(400).json({ error: "No worksheet text or task idea provided." });
-      }
-      if (kickoff.worksheetText.length > MAX_INPUT_CHARS) {
-        return res.status(413).json({
-          error: `Source text is too long (${kickoff.worksheetText.length} chars, limit ${MAX_INPUT_CHARS}). Trim it and try again.`,
-        });
-      }
-      messages.push({ role: "user", content: buildKickoffMessage(kickoff) });
-    } else if (instruction && instruction.trim()) {
-      messages.push({ role: "user", content: instruction.trim() });
-    } else {
-      return res.status(400).json({ error: "Nothing to do: provide a kickoff or an instruction." });
+    const worksheetText = req.body?.kickoff?.worksheetText;
+    if (!worksheetText || !worksheetText.trim()) {
+      return res.status(400).json({ error: "No worksheet text provided." });
     }
-
-    const resp = await client.messages.create({
-      model: MODEL,
-      max_tokens: 8000,
-      system: SYSTEM_PROMPT,
-      messages,
-      output_config: { format: { type: "json_schema", schema: TASK_SCHEMA } },
-    });
-
-    tokensUsedToday += resp.usage?.output_tokens || 0;
-
-    const textBlock = resp.content.find((b) => b.type === "text");
-    if (!textBlock) return res.status(502).json({ error: "Model returned no text." });
-
-    let data;
-    try {
-      data = JSON.parse(textBlock.text);
-    } catch {
-      return res.status(502).json({ error: "Model returned malformed JSON. Try again or rephrase." });
+    if (worksheetText.length > MAX_INPUT_CHARS) {
+      return res.status(413).json({ error: `Source text is too long (${worksheetText.length} chars, limit ${MAX_INPUT_CHARS}). Trim it and try again.` });
     }
-
-    // Echo the assistant turn back so the client can append it to history for refinement.
-    res.json({
-      data,
-      assistant: { role: "assistant", content: textBlock.text },
-      model: MODEL,
-      usage: resp.usage,
-    });
+    const data = await callModel(
+      [{ role: "user", content: buildKickoffMessage({ worksheetText }) }],
+      TASK_SCHEMA,
+    );
+    res.json({ data });
   } catch (err) {
-    if (err instanceof Anthropic.RateLimitError) {
-      return res.status(429).json({ error: "Upstream rate limit. Wait a moment and retry." });
+    handleModelError(res, err);
+  }
+});
+
+// Refine a single idea with an instruction (stateless).
+// Body: { idea, instruction } -> { idea: revised }  (structured or { freeText })
+app.post("/api/refine", rateGuard, async (req, res) => {
+  try {
+    const { idea, instruction } = req.body || {};
+    if (!idea || typeof idea !== "object") {
+      return res.status(400).json({ error: "Provide an idea to refine." });
     }
-    if (err instanceof Anthropic.APIError) {
-      return res.status(502).json({ error: `Model error: ${err.message}` });
+    if (!instruction || !instruction.trim()) {
+      return res.status(400).json({ error: "Provide an instruction." });
     }
-    console.error(err);
-    res.status(500).json({ error: "Unexpected server error." });
+    const isFreeText = typeof idea.freeText === "string";
+    const schema = isFreeText ? FREETEXT_SCHEMA : REFINE_SCHEMA;
+    const revised = await callModel(
+      [{ role: "user", content: buildRefineMessage({ idea, instruction }) }],
+      schema,
+    );
+    res.json({ idea: revised });
+  } catch (err) {
+    handleModelError(res, err);
+  }
+});
+
+// Stress-test a single idea.
+// Body: { idea } -> { result: { verdict, specifics, improved_brief } }
+app.post("/api/stress", rateGuard, async (req, res) => {
+  try {
+    const { idea } = req.body || {};
+    if (!idea || typeof idea !== "object") {
+      return res.status(400).json({ error: "Provide an idea to stress-test." });
+    }
+    const result = await callModel(
+      [{ role: "user", content: buildStressMessage({ idea }) }],
+      STRESS_SCHEMA,
+    );
+    res.json({ result });
+  } catch (err) {
+    handleModelError(res, err);
   }
 });
 
