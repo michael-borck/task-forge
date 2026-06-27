@@ -19,8 +19,7 @@
         <button id="btnGenerate" class="primary" title="Turn a worksheet into 2–3 AI-task designs (adds them to your list)">Generate</button>
         <button id="btnAdd" class="ghost" title="Add a task you already have, as-is, then stress-test it">Add idea</button>
         <button id="btnClear" class="ghost" title="Wipe everything saved in this browser and start fresh">Clear all</button>
-        <span class="sel" id="hint"></span>
-        <button id="btnHelp" class="ghost small" title="Show tips for using Task Forge">Tips</button>
+        <button id="btnHelp" class="ghost small" style="margin-left:auto" title="Show tips for using Task Forge">Tips</button>
       </div>
 
 
@@ -79,6 +78,12 @@
           <button id="composeGo" class="primary">Generate</button>
         </div>
       </div>
+    </div>
+
+    <!-- working indicator (walking stick man) -->
+    <div class="worker" id="worker">
+      <pre class="walk" id="walk"></pre>
+      <span class="muted" id="workerLabel"></span>
     </div>
 
     <script type="module" src="app.js"></script>

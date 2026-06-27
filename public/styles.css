@@ -38,8 +38,9 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 /* action bar */
 .actionbar { position: sticky; top: 0; z-index: 20; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
-.actionbar .sel { margin-left: auto; font-size: 13px; color: var(--muted); }
-#hint.busy { font-size: 22px; line-height: 1; letter-spacing: 3px; color: var(--accent); }
+.worker { position: fixed; right: 18px; bottom: 18px; z-index: 40; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; box-shadow: 0 6px 20px rgba(0,0,0,.12); display: none; align-items: center; gap: 12px; }
+.worker.show { display: flex; }
+.worker .walk { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; line-height: 1.15; color: var(--accent); }
 
 /* input card */
 .inputcard .pillrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }

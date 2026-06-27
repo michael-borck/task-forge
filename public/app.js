@@ -65,22 +65,25 @@ async function api(path, body) {
   if (!res.ok) throw new Error(json.error || `Request failed (${res.status}).`);
   return json;
 }
+const WALK = [
+  "  o  \n /|\\ \n / \\",
+  "  o  \n /|\\ \n  >  ",
+  "  o  \n /|\\ \n <   ",
+  "  o  \n /|\\ \n / \\",
+];
 let busyTimer = null;
-function setBusy(on) {
+function setBusy(on, label) {
   if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }
-  const h = $("hint");
-  h.classList.toggle("busy", on);
-  if (on) {
-    let n = 0;
-    const tick = () => { n = (n % 4) + 1; h.textContent = ".".repeat(n); };
-    tick();
-    busyTimer = setInterval(tick, 400);
-  } else {
-    h.textContent = "";
-  }
-  // lock AI-triggering buttons while a call is in flight (no double-clicks / queued calls)
   $("btnGenerate").disabled = on;
   document.querySelectorAll(".stress-head button").forEach((b) => { b.disabled = on; });
+  const w = $("worker");
+  if (!on) { w.classList.remove("show"); return; }
+  $("workerLabel").textContent = label || "Working…";
+  let i = 0;
+  const tick = () => { $("walk").textContent = WALK[i % WALK.length]; i++; };
+  tick();
+  w.classList.add("show");
+  busyTimer = setInterval(tick, 180);
 }
 
 // --- actions ---
@@ -88,7 +91,7 @@ async function doGenerate() {
   const t = state.boxText.trim();
   if (!t) return;
   $("btnGenerate").textContent = "Generating…";
-  setBusy(true);
+  setBusy(true, "Generating task designs…");
   try {
     const { data } = await api("/api/generate", { kickoff: { worksheetText: t } });
     const fresh = (data.options || []).map((opt) => ({
@@ -160,7 +163,7 @@ async function doStress(id, btn, origLabel) {
   const idea = find(id);
   if (!idea) return;
   if (btn) btn.textContent = "Stress testing…";
-  setBusy(true);
+  setBusy(true, "Stress testing…");
   try {
     const { result } = await api("/api/stress", { idea: idea.content });
     idea.stress = result;
@@ -196,7 +199,7 @@ async function doRefineGo() {
   const idea = find(refineTargetId);
   if (!idea) { closeRefine(); return; }
   $("refineGo").disabled = true;
-  setBusy(true);
+  setBusy(true, "Refining…");
   try {
     const { idea: revised } = await api("/api/refine", { idea: idea.content, instruction: instr });
     idea.content = revised;
@@ -473,7 +476,7 @@ $("composeBox").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e
 $("composeFile").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  setBusy(true);
+  setBusy(true, "Reading file…");
   try {
     const text = await extractText(file);
     $("composeBox").value = text;
