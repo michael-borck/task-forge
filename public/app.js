@@ -69,18 +69,25 @@ let busyTimer = null;
 function setBusy(on) {
   if (busyTimer) { clearInterval(busyTimer); busyTimer = null; }
   const h = $("hint");
-  if (!on) { h.classList.remove("busy"); h.textContent = ""; return; }
-  h.classList.add("busy");
-  let n = 0;
-  const tick = () => { n = (n % 4) + 1; h.textContent = ".".repeat(n); };
-  tick();
-  busyTimer = setInterval(tick, 400);
+  h.classList.toggle("busy", on);
+  if (on) {
+    let n = 0;
+    const tick = () => { n = (n % 4) + 1; h.textContent = ".".repeat(n); };
+    tick();
+    busyTimer = setInterval(tick, 400);
+  } else {
+    h.textContent = "";
+  }
+  // lock AI-triggering buttons while a call is in flight (no double-clicks / queued calls)
+  $("btnGenerate").disabled = on;
+  document.querySelectorAll(".stress-head button").forEach((b) => { b.disabled = on; });
 }
 
 // --- actions ---
 async function doGenerate() {
   const t = state.boxText.trim();
   if (!t) return;
+  $("btnGenerate").textContent = "Generating…";
   setBusy(true);
   try {
     const { data } = await api("/api/generate", { kickoff: { worksheetText: t } });
@@ -99,6 +106,7 @@ async function doGenerate() {
     alert(e.message);
   } finally {
     setBusy(false);
+    $("btnGenerate").textContent = "Generate";
     updateActions();
   }
 }
@@ -148,9 +156,10 @@ async function doCompose() {
   else doGenerate();
 }
 
-async function doStress(id) {
+async function doStress(id, btn, origLabel) {
   const idea = find(id);
   if (!idea) return;
+  if (btn) btn.textContent = "Stress testing…";
   setBusy(true);
   try {
     const { result } = await api("/api/stress", { idea: idea.content });
@@ -162,6 +171,7 @@ async function doStress(id) {
     alert(e.message);
   } finally {
     setBusy(false);
+    if (btn) btn.textContent = origLabel;
   }
 }
 
@@ -347,7 +357,7 @@ function renderIdea(idea) {
     sh.appendChild(el("span", "status done", "Done ✓"));
     const rerun = el("button", "ghost small", "Re-run");
     rerun.title = "Re-run the stress test (replaces the current result)";
-    rerun.addEventListener("click", (e) => { e.stopPropagation(); doStress(idea.id); });
+    rerun.addEventListener("click", (e) => { e.stopPropagation(); doStress(idea.id, rerun, rerun.textContent); });
     sh.appendChild(rerun);
     const shChev = el("span", "chev", openSet.has("stress-" + idea.id) ? "▾" : "▸");
     sh.appendChild(shChev);
@@ -360,7 +370,7 @@ function renderIdea(idea) {
     sh.appendChild(el("span", "status notrun", "Not run"));
     const cta = el("button", "primary small", "Stress test this idea");
     cta.title = "Run a stress test on this idea";
-    cta.addEventListener("click", (e) => { e.stopPropagation(); doStress(idea.id); });
+    cta.addEventListener("click", (e) => { e.stopPropagation(); doStress(idea.id, cta, cta.textContent); });
     sh.appendChild(cta);
     stress.appendChild(sh);
     const note = el("div", "stress-note");
