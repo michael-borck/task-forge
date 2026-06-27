@@ -30,6 +30,20 @@
       <span class="muted">keep-asking · HREC 83897 · task designs are drafts for the team to refine and sign off.</span>
     </footer>
 
+    <!-- access-code gate -->
+    <div class="overlay" id="authOverlay" hidden style="background: var(--bg)">
+      <div class="card" style="max-width: 380px">
+        <h3 style="margin-top:0">Task Forge</h3>
+        <p class="muted">Enter the access code to continue.</p>
+        <label for="authCode">Access code</label>
+        <input id="authCode" type="password" placeholder="Access code" autocomplete="current-password" />
+        <div class="row" style="justify-content:flex-end; gap:8px; margin-top:14px">
+          <button id="authGo" class="primary">Enter</button>
+        </div>
+        <p id="authErr" class="muted" style="margin-top:10px; color:#b00020; min-height:1.2em"></p>
+      </div>
+    </div>
+
     <!-- first-visit workflow overlay -->
     <div class="overlay" id="overlay" hidden>
       <div class="card">

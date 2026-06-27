@@ -23,6 +23,7 @@ const MODEL = process.env.MODEL || "claude-sonnet-4-6";
 const MAX_REQUESTS_PER_DAY = Number(process.env.MAX_REQUESTS_PER_DAY || 100); // per IP
 const DAILY_TOKEN_CAP = Number(process.env.DAILY_TOKEN_CAP || 2_000_000); // global output-token ceiling
 const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 60_000); // guard on pasted/parsed text
+const ACCESS_CODE = process.env.ACCESS_CODE || ""; // shared passphrase; empty = open
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.error("FATAL: ANTHROPIC_API_KEY is not set. Put it in .env.");
@@ -65,6 +66,20 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, model: MODEL });
 });
 
+// --- access gate (shared passphrase; empty ACCESS_CODE = open) ---
+function accessGuard(req, res, next) {
+  if (!ACCESS_CODE) return next();
+  if (req.get("x-access-code") === ACCESS_CODE) return next();
+  return res.status(401).json({ error: "Invalid or missing access code.", auth: true });
+}
+app.get("/api/config", (_req, res) => res.json({ requiresCode: Boolean(ACCESS_CODE) }));
+app.post("/api/verify", (req, res) => {
+  if (!ACCESS_CODE) return res.json({ ok: true });
+  const code = String(req.body?.code || "");
+  if (code && code === ACCESS_CODE) return res.json({ ok: true });
+  return res.status(401).json({ error: "Invalid access code." });
+});
+
 // Call the model with a json_schema and return parsed JSON. Throws on upstream
 // errors (caught by handleModelError in each route).
 async function callModel(messages, schema) {
@@ -105,7 +120,7 @@ function handleModelError(res, err) {
 
 // Re-engineer a worksheet into 2-3 task designs.
 // Body: { kickoff: { worksheetText } } -> { data: { summary, options } }
-app.post("/api/generate", rateGuard, async (req, res) => {
+app.post("/api/generate", accessGuard, rateGuard, async (req, res) => {
   try {
     const worksheetText = req.body?.kickoff?.worksheetText;
     if (!worksheetText || !worksheetText.trim()) {
@@ -126,7 +141,7 @@ app.post("/api/generate", rateGuard, async (req, res) => {
 
 // Refine a single idea with an instruction (stateless).
 // Body: { idea, instruction } -> { idea: revised }  (structured or { freeText })
-app.post("/api/refine", rateGuard, async (req, res) => {
+app.post("/api/refine", accessGuard, rateGuard, async (req, res) => {
   try {
     const { idea, instruction } = req.body || {};
     if (!idea || typeof idea !== "object") {
@@ -149,7 +164,7 @@ app.post("/api/refine", rateGuard, async (req, res) => {
 
 // Stress-test a single idea.
 // Body: { idea } -> { result: { verdict, specifics, improved_brief } }
-app.post("/api/stress", rateGuard, async (req, res) => {
+app.post("/api/stress", accessGuard, rateGuard, async (req, res) => {
   try {
     const { idea } = req.body || {};
     if (!idea || typeof idea !== "object") {

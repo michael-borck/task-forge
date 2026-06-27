@@ -32,6 +32,34 @@ let uidCounter = state.ideas.reduce((m, i) => Math.max(m, i.id || 0), 0);
 let refineTargetId = null;
 const find = (id) => state.ideas.find((i) => i.id === id);
 
+// --- access gate (shared code stored in localStorage, sent as a header) ---
+let accessCode = localStorage.getItem("tf_access_code") || "";
+function enterApp() { render(); if (!state.visited) $("overlay").hidden = false; }
+function showAuth() {
+  $("authOverlay").hidden = false;
+  $("authCode").value = "";
+  $("authErr").textContent = "";
+  setTimeout(() => $("authCode").focus(), 40);
+}
+async function doAuth() {
+  const code = $("authCode").value.trim();
+  if (!code) return;
+  $("authGo").disabled = true;
+  try {
+    const res = await fetch("/api/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    if (res.ok) { accessCode = code; localStorage.setItem("tf_access_code", code); $("authOverlay").hidden = true; enterApp(); }
+    else $("authErr").textContent = "That code didn't work. Try again.";
+  } catch { $("authErr").textContent = "Couldn't reach the server."; }
+  finally { $("authGo").disabled = false; }
+}
+async function ensureAccess() {
+  try {
+    const cfg = await (await fetch("/api/config")).json();
+    if (!cfg.requiresCode) { enterApp(); return; }
+  } catch { /* fall through */ }
+  if (accessCode) enterApp(); else showAuth();
+}
+
 // --- file parsing (in browser; raw file never leaves the machine) ---
 async function extractText(file) {
   const name = file.name.toLowerCase();
@@ -58,9 +86,15 @@ async function extractText(file) {
 async function api(path, body) {
   const res = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-access-code": accessCode },
     body: JSON.stringify(body),
   });
+  if (res.status === 401) {
+    localStorage.removeItem("tf_access_code");
+    accessCode = "";
+    showAuth();
+    throw new Error("Access required.");
+  }
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || `Request failed (${res.status}).`);
   return json;
@@ -494,8 +528,9 @@ $("composeFile").addEventListener("change", async (e) => {
 $("refineCancel").addEventListener("click", closeRefine);
 $("refineGo").addEventListener("click", doRefineGo);
 $("refineInstr").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) doRefineGo(); });
-if (!state.visited) { $("overlay").hidden = false; }
 $("btnDismiss").addEventListener("click", () => { state.visited = true; save(); $("overlay").hidden = true; });
 $("btnHelp").addEventListener("click", () => { $("overlay").hidden = false; });
+$("authGo").addEventListener("click", doAuth);
+$("authCode").addEventListener("keydown", (e) => { if (e.key === "Enter") doAuth(); });
 
-render();
+ensureAccess();
