@@ -1,5 +1,5 @@
 {
-  "name": "task-forge",
+  "name": "keep-asking-task-designer",
   "version": "0.1.0",
   "private": true,
   "description": "Kickoff helper for the keep-asking trial: turn an existing worksheet into an AI-assisted lab task, in the approved task-design format.",

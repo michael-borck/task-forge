@@ -20,6 +20,7 @@ header, main, footer { max-width: 880px; margin: 0 auto; padding: 0 20px; }
 header { padding-top: 32px; }
 h1 { margin: 0 0 4px; font-size: 28px; }
 .sub { color: var(--muted); margin: 0 0 18px; max-width: 64ch; }
+.tagline { color: var(--muted); margin: 4px 0 18px; max-width: 64ch; font-size: 15px; line-height: 1.5; }
 
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin: 0 0 18px; }
 label { display: block; font-weight: 600; font-size: 14px; margin: 12px 0 6px; }

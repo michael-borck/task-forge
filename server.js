@@ -181,5 +181,5 @@ app.post("/api/stress", accessGuard, rateGuard, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Task Forge listening on :${PORT} (model=${MODEL})`);
+  console.log(`Keep-Asking Task Designer listening on :${PORT} (model=${MODEL})`);
 });

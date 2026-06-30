@@ -479,7 +479,7 @@ async function ideaToDocxBlob(idea) {
     ch.push(h2("Pre-pilot checklist"));
     (c.checklist || []).forEach((c2) => ch.push(bullet(`${c2.status === "ok" ? "✓" : "⚠"} ${c2.item}${c2.note ? " — " + c2.note : ""}`)));
   }
-  ch.push(new Paragraph({ spacing: { before: 200 }, children: [new TextRun({ text: "Draft from Task Forge for the keep-asking study (HREC 83897). Review and sign off before piloting.", italics: true, color: "666666" })] }));
+  ch.push(new Paragraph({ spacing: { before: 200 }, children: [new TextRun({ text: "Draft from the Keep-Asking Task Designer (HREC 83897). Review and sign off before piloting.", italics: true, color: "666666" })] }));
   return await Packer.toBlob(new Document({ sections: [{ children: ch }] }));
 }
 

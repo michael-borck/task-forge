@@ -1,4 +1,4 @@
-# Task Forge
+# Keep-Asking Task Designer
 
 A small kickoff helper for the **keep-asking** study (HREC 83897). A co-investigator
 uploads an existing worksheet (or pastes a rough idea), and the tool returns 2–3
@@ -50,9 +50,9 @@ the container listens on `:8080` and has no built-in auth. For a small team, a o
 `basic_auth` in your Caddyfile is the simplest gate:
 
 ```
-task-forge.example.edu {
+keep-asking-task-designer.example.edu {
     basic_auth { team JDJhJDE0...hash }   # generate with: caddy hash-password
-    reverse_proxy task-forge:8080
+    reverse_proxy keep-asking-task-designer:8080
 }
 ```
 

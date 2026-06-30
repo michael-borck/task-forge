@@ -1,4 +1,4 @@
-# Build a small production image for the Task Forge service.
+# Build a small production image for the Keep-Asking Task Designer service.
 FROM node:22-alpine
 
 WORKDIR /app

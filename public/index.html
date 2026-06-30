@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Task Forge — keep-asking task designer</title>
+    <title>Keep-Asking Task Designer</title>
     <link rel="stylesheet" href="styles.css" />
     <!-- In-browser parsers: the uploaded file is read locally; only extracted text is sent. -->
     <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
@@ -11,7 +11,8 @@
   </head>
   <body>
     <header>
-      <h1>Task Forge</h1>
+      <h1>Keep-Asking Task Designer</h1>
+      <p class="tagline">Upload a worksheet or paste a rough idea — get back 2–3 ready-to-pilot AI-assisted lab task designs in the study's approved format.</p>
     </header>
 
     <main>
@@ -19,7 +20,7 @@
         <button id="btnGenerate" class="primary" title="Turn a worksheet into 2–3 AI-task designs (adds them to your list)">Generate</button>
         <button id="btnAdd" class="ghost" title="Add a task you already have, as-is, then stress-test it">Add idea</button>
         <button id="btnClear" class="ghost" title="Wipe everything saved in this browser and start fresh">Clear all</button>
-        <button id="btnHelp" class="ghost small" style="margin-left:auto" title="Show tips for using Task Forge">Tips</button>
+        <button id="btnHelp" class="ghost small" style="margin-left:auto" title="Show tips for using Keep-Asking Task Designer">Tips</button>
       </div>
 
 
@@ -33,7 +34,7 @@
     <!-- access-code gate -->
     <div class="overlay" id="authOverlay" hidden style="background: var(--bg)">
       <div class="card" style="max-width: 380px">
-        <h3 style="margin-top:0">Task Forge</h3>
+        <h3 style="margin-top:0">Keep-Asking Task Designer</h3>
         <p class="muted">Enter the access code to continue.</p>
         <label for="authCode">Access code</label>
         <input id="authCode" type="password" placeholder="Access code" autocomplete="current-password" />
@@ -47,7 +48,7 @@
     <!-- first-visit workflow overlay -->
     <div class="overlay" id="overlay" hidden>
       <div class="card">
-        <h3 style="margin-top:0">Welcome to Task Forge</h3>
+        <h3 style="margin-top:0">Welcome to Keep-Asking Task Designer</h3>
         <p>Turn one of your existing worksheets or tutorial ideas into an AI-assisted lab task for the <strong>keep-asking</strong> study.</p>
         <p class="muted">Everything here is a <em>suggestion</em>, not a required format — you're in charge. Use what helps, ignore what doesn't, and keep your own approach. These are starting points, not a template you must follow.</p>
         <p class="muted"><strong>A few ways to use it:</strong></p>

@@ -1,7 +1,7 @@
 # VPS deploy: put your .env next to this file, then `docker compose pull && docker compose up -d`.
 services:
-  task-forge:
-    image: ghcr.io/michael-borck/task-forge:latest
+  keep-asking-task-designer:
+    image: ghcr.io/michael-borck/keep-asking-task-designer:latest
     restart: unless-stopped
     env_file: .env
     ports:
